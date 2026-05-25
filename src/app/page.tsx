@@ -189,35 +189,35 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
       <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-6 py-6 lg:px-10">
-        <header className="flex items-center justify-between border-b border-black/10 pb-5">
+        <header className="flex items-center justify-between border-b border-[var(--border)] pb-5">
           <div>
-            <p className="text-sm font-medium tracking-[0.18em] text-black/50 uppercase">Pomotree</p>
+            <p className="text-sm font-medium tracking-[0.18em] text-[var(--muted)] uppercase">Pomotree</p>
             <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Focus tree, one session at a time</h1>
           </div>
-          <div className="rounded-full border border-black/10 px-3 py-1 text-sm text-black/60">
+          <div className="rounded-full border border-[var(--border)] px-3 py-1 text-sm text-[var(--muted)]">
             {loading ? "Loading…" : ready ? "Local-first MVP" : "Not ready"}
           </div>
         </header>
 
-        {error ? <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p> : null}
+        {error ? <p className="mt-4 rounded-2xl border border-[var(--danger-border)] bg-[var(--danger-bg)] px-4 py-3 text-sm text-[var(--danger-text)]">{error}</p> : null}
         {recoveryNotice ? (
-          <p className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+          <p className="mt-4 rounded-2xl border border-[var(--info-border)] bg-[var(--info-bg)] px-4 py-3 text-sm text-[var(--info-text)]">
             {recoveryNotice.message}
           </p>
         ) : null}
 
         <section className="grid flex-1 gap-6 py-6 lg:grid-cols-[1.2fr_0.8fr] xl:grid-cols-[1.35fr_0.65fr]">
           <div className="grid gap-6">
-            <section className="rounded-3xl border border-black/10 bg-white p-6 shadow-[0_1px_0_rgba(0,0,0,0.02)]">
+            <section className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_1px_0_var(--shadow-line)]">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-sm font-medium text-black/50">Current focus</p>
+                  <p className="text-sm font-medium text-[var(--muted)]">Current focus</p>
                   <h2 className="mt-1 text-4xl font-semibold tracking-tight" aria-label={`Remaining time ${formatClock(remainingSeconds)}`}>{formatClock(remainingSeconds)}</h2>
                 </div>
                 <div className="flex flex-wrap justify-end gap-2">
                   {!activeSession ? (
                     <button
-                      className="rounded-full bg-black px-4 py-2 text-sm font-medium text-white"
+                      className="rounded-full bg-[var(--primary)] px-4 py-2 text-sm font-medium text-[var(--primary-foreground)]"
                       disabled={!canStartFocus}
                       onClick={() => void startFocus(effectiveTaskId ?? null, focusIntention, customPlannedSeconds).then(() => setFocusIntention(""))}
                     >
@@ -225,14 +225,14 @@ export default function Home() {
                     </button>
                   ) : activeSession.status === "paused" ? (
                     <button
-                      className="rounded-full bg-black px-4 py-2 text-sm font-medium text-white"
+                      className="rounded-full bg-[var(--primary)] px-4 py-2 text-sm font-medium text-[var(--primary-foreground)]"
                       onClick={() => void resumeSession()}
                     >
                       Resume
                     </button>
                   ) : activeSession.status === "running" ? (
                     <button
-                      className="rounded-full bg-black px-4 py-2 text-sm font-medium text-white"
+                      className="rounded-full bg-[var(--primary)] px-4 py-2 text-sm font-medium text-[var(--primary-foreground)]"
                       onClick={() => void pauseSession()}
                     >
                       Pause
@@ -240,7 +240,7 @@ export default function Home() {
                   ) : null}
                   {activeSession && activeSession.status !== "finishing" ? (
                     <button
-                      className="rounded-full border border-black/10 px-4 py-2 text-sm font-medium text-black/65"
+                      className="rounded-full border border-[var(--border)] px-4 py-2 text-sm font-medium text-[var(--muted)]"
                       onClick={() => void requestFinish()}
                     >
                       Finish
@@ -248,7 +248,7 @@ export default function Home() {
                   ) : null}
                   {activeSession ? (
                     <button
-                      className="rounded-full border border-black/10 px-4 py-2 text-sm font-medium text-black/65"
+                      className="rounded-full border border-[var(--border)] px-4 py-2 text-sm font-medium text-[var(--muted)]"
                       onClick={() => void discardSession()}
                     >
                       Discard
@@ -262,21 +262,21 @@ export default function Home() {
                   ["State", activeSession?.status ?? "Idle"],
                   ["Planned", `${(activeSession?.plannedSeconds ?? previewPlannedSeconds) / 60} min`],
                 ].map(([label, value]) => (
-                  <div key={label} className="rounded-2xl bg-black/[0.03] p-4">
-                    <p className="text-xs font-medium uppercase tracking-[0.16em] text-black/45">{label}</p>
-                    <p className="mt-2 text-sm font-medium text-black/80">{value}</p>
+                  <div key={label} className="rounded-2xl bg-[var(--surface-soft)] p-4">
+                    <p className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--muted)]">{label}</p>
+                    <p className="mt-2 text-sm font-medium text-[var(--muted-strong)]">{value}</p>
                   </div>
                 ))}
               </div>
               <div className="mt-4">
-                <label className="text-xs font-medium uppercase tracking-[0.16em] text-black/45" htmlFor="task-attribution">
+                <label className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--muted)]" htmlFor="task-attribution">
                   Actual attribution
                 </label>
                 <select
                   id="task-attribution"
                   value={effectiveTaskId ?? ""}
                   onChange={(event) => setSelectedTaskId(event.target.value || null)}
-                  className="mt-2 w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm outline-none"
+                  className="mt-2 w-full rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm outline-none"
                 >
                   <option value="">Unassigned / intention</option>
                   {visibleTasks.map(({ task, depth }) => (
@@ -289,19 +289,19 @@ export default function Home() {
               {!activeSession ? (
                 <div className="mt-4 grid gap-4 md:grid-cols-[1fr_160px]">
                   <div>
-                    <label className="text-xs font-medium uppercase tracking-[0.16em] text-black/45" htmlFor="focus-intention">
+                    <label className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--muted)]" htmlFor="focus-intention">
                       Intention without a task
                     </label>
                     <input
                       id="focus-intention"
                       value={focusIntention}
                       onChange={(event) => setFocusIntention(event.target.value)}
-                      className="mt-2 w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm outline-none placeholder:text-black/30"
+                      className="mt-2 w-full rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm outline-none placeholder:text-[var(--placeholder)]"
                       placeholder="e.g. Read and annotate the proposal"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-medium uppercase tracking-[0.16em] text-black/45" htmlFor="planned-minutes">
+                    <label className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--muted)]" htmlFor="planned-minutes">
                       Focus minutes
                     </label>
                     <input
@@ -312,41 +312,41 @@ export default function Home() {
                       type="number"
                       value={plannedMinutes}
                       onChange={(event) => setPlannedMinutes(event.target.value)}
-                      className="mt-2 w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm outline-none placeholder:text-black/30"
+                      className="mt-2 w-full rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm outline-none placeholder:text-[var(--placeholder)]"
                       placeholder={String(settings.defaultFocusSeconds / 60)}
                     />
                   </div>
                 </div>
               ) : null}
               {activeSession?.status === "finishing" ? (
-                <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4">
-                  <p className="text-sm font-semibold text-amber-900">Finish this focus session</p>
+                <div className="mt-5 rounded-2xl border border-[var(--warning-border)] bg-[var(--warning-bg)] p-4">
+                  <p className="text-sm font-semibold text-[var(--warning-text)]">Finish this focus session</p>
                   <textarea
                     value={summary}
                     onChange={(event) => setSummary(event.target.value)}
-                    className="mt-3 min-h-24 w-full resize-none rounded-2xl border border-amber-200 bg-white p-3 text-sm outline-none placeholder:text-black/30"
+                    className="mt-3 min-h-24 w-full resize-none rounded-2xl border border-[var(--warning-border)] bg-[var(--surface)] p-3 text-sm outline-none placeholder:text-[var(--placeholder)]"
                     placeholder="What did you actually complete? Summary is optional for MVP."
                   />
                   {effectiveTaskId ? (
-                    <label className="mt-3 flex items-center justify-between gap-4 rounded-2xl bg-white px-3 py-2 text-sm text-amber-950">
+                    <label className="mt-3 flex items-center justify-between gap-4 rounded-2xl bg-[var(--surface)] px-3 py-2 text-sm text-[var(--warning-text)]">
                       <span>Mark attributed task done</span>
                       <input
                         type="checkbox"
                         checked={markTaskDone}
                         onChange={(event) => setMarkTaskDone(event.target.checked)}
-                        className="h-5 w-5 accent-black"
+                        className="h-5 w-5 accent-[var(--primary)]"
                       />
                     </label>
                   ) : null}
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button
-                      className="rounded-full bg-black px-4 py-2 text-sm font-medium text-white"
+                      className="rounded-full bg-[var(--primary)] px-4 py-2 text-sm font-medium text-[var(--primary-foreground)]"
                       onClick={() => void saveFinish({ status: "completed", summary, taskId: effectiveTaskId, markTaskDone }).then(() => { setSummary(""); setSelectedTaskId(undefined); setMarkTaskDone(false); })}
                     >
                       Save completed
                     </button>
                     <button
-                      className="rounded-full border border-black/10 px-4 py-2 text-sm font-medium"
+                      className="rounded-full border border-[var(--border)] px-4 py-2 text-sm font-medium"
                       onClick={() => void saveFinish({ status: "partial", summary, taskId: effectiveTaskId, markTaskDone }).then(() => { setSummary(""); setSelectedTaskId(undefined); setMarkTaskDone(false); })}
                     >
                       Save partial
@@ -357,10 +357,10 @@ export default function Home() {
             </section>
 
             <section className="grid gap-4 md:grid-cols-[0.95fr_1.05fr]">
-              <div className="rounded-3xl border border-black/10 bg-white p-6">
+              <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold">Task tree</h3>
-                  <button className="text-sm font-medium text-black/55">+ Task</button>
+                  <button className="text-sm font-medium text-[var(--muted)]">+ Task</button>
                 </div>
                 <form
                   className="mt-4 flex gap-2"
@@ -373,49 +373,49 @@ export default function Home() {
                   <input
                     value={taskTitle}
                     onChange={(event) => setTaskTitle(event.target.value)}
-                    className="w-full rounded-2xl border border-black/10 bg-black/[0.02] px-4 py-3 text-sm outline-none placeholder:text-black/30"
+                    className="w-full rounded-2xl border border-[var(--border)] bg-[var(--surface-soft)] px-4 py-3 text-sm outline-none placeholder:text-[var(--placeholder)]"
                     placeholder="Add a task or path, e.g. Project / Subtask"
                   />
-                  <button className="rounded-2xl bg-black px-4 py-3 text-sm font-medium text-white">Add</button>
+                  <button className="rounded-2xl bg-[var(--primary)] px-4 py-3 text-sm font-medium text-[var(--primary-foreground)]">Add</button>
                 </form>
                 <div className="mt-5 space-y-3 text-sm">
                   {tasks.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-black/10 bg-black/[0.02] px-4 py-6 text-black/45">
+                    <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface-soft)] px-4 py-6 text-[var(--muted)]">
                       No tasks yet. Create your first focus tree node.
                     </div>
                   ) : (
                     visibleTasks.map(({ task, depth }) => (
-                      <div key={task.id} className="rounded-2xl border border-black/5 bg-black/[0.02] px-4 py-3" style={{ marginLeft: depth * 16 }}>
+                      <div key={task.id} className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-soft)] px-4 py-3" style={{ marginLeft: depth * 16 }}>
                         <div className="flex items-center justify-between gap-3">
                           <div>
                             <span className="font-medium">{depth > 0 ? "↳ " : ""}{task.title}</span>
-                            <p className="mt-1 text-xs text-black/45">
+                            <p className="mt-1 text-xs text-[var(--muted)]">
                               {taskStatsById.get(task.id)?.completedCount ?? 0} done - {formatDuration(taskStatsById.get(task.id)?.totalFocusSeconds ?? 0)}
                             </p>
                           </div>
                           <div className="flex flex-wrap items-center justify-end gap-2">
                             <button
                               aria-label={`Focus ${task.title}`}
-                              className="rounded-full border border-black/10 px-3 py-1 text-xs font-medium text-black/55 disabled:opacity-40"
+                              className="rounded-full border border-[var(--border)] px-3 py-1 text-xs font-medium text-[var(--muted)] disabled:opacity-40"
                               disabled={Boolean(activeSession)}
                               onClick={() => void startFocus(task.id, focusIntention, customPlannedSeconds).then(() => setFocusIntention(""))}
                             >
                               Focus
                             </button>
                             <button
-                              className="rounded-full border border-black/10 px-3 py-1 text-xs font-medium text-black/55"
+                              className="rounded-full border border-[var(--border)] px-3 py-1 text-xs font-medium text-[var(--muted)]"
                               onClick={() => void updateTask(task.id, { status: task.status === "done" ? "todo" : "done" })}
                             >
                               {task.status === "done" ? "Reopen" : "Done"}
                             </button>
                             <button
-                              className="rounded-full border border-black/10 px-3 py-1 text-xs font-medium text-black/55"
+                              className="rounded-full border border-[var(--border)] px-3 py-1 text-xs font-medium text-[var(--muted)]"
                               onClick={() => beginEditTask(task)}
                             >
                               Edit
                             </button>
                             <button
-                              className="rounded-full border border-black/10 px-3 py-1 text-xs font-medium text-black/55"
+                              className="rounded-full border border-[var(--border)] px-3 py-1 text-xs font-medium text-[var(--muted)]"
                               onClick={() => void updateTask(task.id, { status: "archived" })}
                             >
                               Archive
@@ -424,7 +424,7 @@ export default function Home() {
                         </div>
                         {editingTaskId === task.id ? (
                           <form
-                            className="mt-3 grid gap-2 rounded-2xl bg-white p-3 md:grid-cols-[1fr_180px_auto_auto]"
+                            className="mt-3 grid gap-2 rounded-2xl bg-[var(--surface)] p-3 md:grid-cols-[1fr_180px_auto_auto]"
                             onSubmit={(event) => {
                               event.preventDefault();
                               void saveTaskEdit();
@@ -434,13 +434,13 @@ export default function Home() {
                               aria-label={`Edit title for ${task.title}`}
                               value={editingTaskTitle}
                               onChange={(event) => setEditingTaskTitle(event.target.value)}
-                              className="rounded-xl border border-black/10 px-3 py-2 outline-none"
+                              className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 outline-none"
                             />
                             <select
                               aria-label={`Move ${task.title}`}
                               value={editingParentId}
                               onChange={(event) => setEditingParentId(event.target.value)}
-                              className="rounded-xl border border-black/10 px-3 py-2 outline-none"
+                              className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 outline-none"
                             >
                               <option value="">Root</option>
                               {editableParentOptions.map(({ task: optionTask, depth: optionDepth }) => (
@@ -449,10 +449,10 @@ export default function Home() {
                                 </option>
                               ))}
                             </select>
-                            <button className="rounded-xl bg-black px-3 py-2 text-xs font-medium text-white">Save task</button>
+                            <button className="rounded-xl bg-[var(--primary)] px-3 py-2 text-xs font-medium text-[var(--primary-foreground)]">Save task</button>
                             <button
                               type="button"
-                              className="rounded-xl border border-black/10 px-3 py-2 text-xs font-medium"
+                              className="rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-medium"
                               onClick={() => setEditingTaskId(null)}
                             >
                               Cancel
@@ -465,7 +465,7 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="rounded-3xl border border-black/10 bg-white p-6">
+              <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6">
                 <h3 className="text-lg font-semibold">Today</h3>
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
                   {[
@@ -474,34 +474,34 @@ export default function Home() {
                     ["Focus time", formatDuration(todayStats.totalFocusSeconds)],
                     ["Interruptions", String(todayStats.openInterruptionCount)],
                   ].map(([label, value]) => (
-                    <div key={label} className="rounded-2xl bg-black/[0.03] p-4">
-                      <p className="text-xs font-medium uppercase tracking-[0.16em] text-black/45">{label}</p>
+                    <div key={label} className="rounded-2xl bg-[var(--surface-soft)] p-4">
+                      <p className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--muted)]">{label}</p>
                       <p className="mt-2 text-lg font-semibold">{value}</p>
                     </div>
                   ))}
                 </div>
                 <div className="mt-5 space-y-3">
-                  <p className="text-xs font-medium uppercase tracking-[0.16em] text-black/45">Recent sessions</p>
+                  <p className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--muted)]">Recent sessions</p>
                   {recentSessions.length === 0 ? (
-                    <p className="rounded-2xl bg-black/[0.03] px-4 py-3 text-sm text-black/45">No completed focus sessions yet.</p>
+                    <p className="rounded-2xl bg-[var(--surface-soft)] px-4 py-3 text-sm text-[var(--muted)]">No completed focus sessions yet.</p>
                   ) : (
                     recentSessions.map((session) => (
                       <article
                         key={session.id}
                         aria-label={`Recent session: ${session.taskPathSnapshot ?? session.intention ?? "Unassigned"}`}
-                        className="rounded-2xl bg-black/[0.03] px-4 py-3 text-sm"
+                        className="rounded-2xl bg-[var(--surface-soft)] px-4 py-3 text-sm"
                       >
                         <div className="flex items-center justify-between gap-3">
                           <span className="font-medium">{session.taskPathSnapshot ?? session.intention ?? "Unassigned"}</span>
-                          <span className="text-xs text-black/45">{session.status}</span>
+                          <span className="text-xs text-[var(--muted)]">{session.status}</span>
                         </div>
-                        <p className="mt-1 text-xs text-black/45">
+                        <p className="mt-1 text-xs text-[var(--muted)]">
                           {formatDuration(session.actualSeconds)}
                           {session.summary ? ` - ${session.summary}` : ""}
                         </p>
                         {editingSessionId === session.id ? (
                           <form
-                            className="mt-3 grid gap-2 rounded-2xl bg-white p-3 sm:grid-cols-[1fr_auto_auto]"
+                            className="mt-3 grid gap-2 rounded-2xl bg-[var(--surface)] p-3 sm:grid-cols-[1fr_auto_auto]"
                             onSubmit={(event) => {
                               event.preventDefault();
                               void saveSessionAttribution();
@@ -511,7 +511,7 @@ export default function Home() {
                               aria-label={`Correct attribution for ${session.taskPathSnapshot ?? session.intention ?? "session"}`}
                               value={editingSessionTaskId}
                               onChange={(event) => setEditingSessionTaskId(event.target.value)}
-                              className="rounded-xl border border-black/10 px-3 py-2 outline-none"
+                              className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 outline-none"
                             >
                               <option value="">Unassigned / intention</option>
                               {visibleTasks.map(({ task, depth }) => (
@@ -520,10 +520,10 @@ export default function Home() {
                                 </option>
                               ))}
                             </select>
-                            <button className="rounded-xl bg-black px-3 py-2 text-xs font-medium text-white">Save</button>
+                            <button className="rounded-xl bg-[var(--primary)] px-3 py-2 text-xs font-medium text-[var(--primary-foreground)]">Save</button>
                             <button
                               type="button"
-                              className="rounded-xl border border-black/10 px-3 py-2 text-xs font-medium"
+                              className="rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-medium"
                               onClick={() => {
                                 setEditingSessionId(null);
                                 setEditingSessionTaskId("");
@@ -534,7 +534,7 @@ export default function Home() {
                           </form>
                         ) : (
                           <button
-                            className="mt-3 rounded-full border border-black/10 px-3 py-1 text-xs font-medium text-black/55"
+                            className="mt-3 rounded-full border border-[var(--border)] px-3 py-1 text-xs font-medium text-[var(--muted)]"
                             onClick={() => beginEditSession(session)}
                           >
                             Correct attribution
@@ -549,45 +549,45 @@ export default function Home() {
           </div>
 
           <aside className="grid gap-6">
-            <section className="rounded-3xl border border-black/10 bg-white p-6">
+            <section className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6">
               <h3 className="text-lg font-semibold">Session notes</h3>
               <textarea
-                className="mt-4 min-h-40 w-full resize-none rounded-2xl border border-black/10 bg-black/[0.02] p-4 text-sm outline-none placeholder:text-black/30"
+                className="mt-4 min-h-40 w-full resize-none rounded-2xl border border-[var(--border)] bg-[var(--surface-soft)] p-4 text-sm outline-none placeholder:text-[var(--placeholder)]"
                 placeholder="Capture an intention, a summary, or the next follow-up task..."
                 value={interruptionText}
                 onChange={(event) => setInterruptionText(event.target.value)}
               />
               <div className="mt-4 flex gap-3">
                 <button
-                  className="rounded-full border border-black/10 px-4 py-2 text-sm font-medium"
+                  className="rounded-full border border-[var(--border)] px-4 py-2 text-sm font-medium"
                   onClick={() => void createInterruption(interruptionText).then(() => setInterruptionText(""))}
                 >
                   Save note
                 </button>
-                <button className="rounded-full border border-black/10 px-4 py-2 text-sm font-medium">Add interruption</button>
+                <button className="rounded-full border border-[var(--border)] px-4 py-2 text-sm font-medium">Add interruption</button>
               </div>
               <div className="mt-5 space-y-3">
                 {openInterruptions.length === 0 ? (
-                  <p className="text-sm text-black/45">No open interruptions.</p>
+                  <p className="text-sm text-[var(--muted)]">No open interruptions.</p>
                 ) : (
                   openInterruptions.map((interruption) => (
-                    <div key={interruption.id} className="rounded-2xl border border-black/10 bg-black/[0.02] p-3">
-                      <p className="text-sm font-medium text-black/75">{interruption.text}</p>
+                    <div key={interruption.id} className="rounded-2xl border border-[var(--border)] bg-[var(--surface-soft)] p-3">
+                      <p className="text-sm font-medium text-[var(--muted-strong)]">{interruption.text}</p>
                       <div className="mt-3 flex flex-wrap gap-2">
                         <button
-                          className="rounded-full border border-black/10 px-3 py-1 text-xs font-medium"
+                          className="rounded-full border border-[var(--border)] px-3 py-1 text-xs font-medium"
                           onClick={() => void convertInterruptionToTask(interruption.id)}
                         >
                           Convert to task
                         </button>
                         <button
-                          className="rounded-full border border-black/10 px-3 py-1 text-xs font-medium"
+                          className="rounded-full border border-[var(--border)] px-3 py-1 text-xs font-medium"
                           onClick={() => void markInterruptionDone(interruption.id)}
                         >
                           Mark done
                         </button>
                         <button
-                          className="rounded-full border border-black/10 px-3 py-1 text-xs font-medium"
+                          className="rounded-full border border-[var(--border)] px-3 py-1 text-xs font-medium"
                           onClick={() => void dismissInterruption(interruption.id)}
                         >
                           Dismiss
@@ -599,13 +599,13 @@ export default function Home() {
               </div>
             </section>
 
-            <section className="rounded-3xl border border-black/10 bg-white p-6">
+            <section className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6">
               <h3 className="text-lg font-semibold">Settings</h3>
               <div className="mt-4 space-y-4 text-sm">
-                <label className="block rounded-2xl bg-black/[0.03] px-4 py-3">
+                <label className="block rounded-2xl bg-[var(--surface-soft)] px-4 py-3">
                   <span>Default focus duration</span>
                   <select
-                    className="mt-2 w-full rounded-xl border border-black/10 bg-white px-3 py-2 font-medium outline-none"
+                    className="mt-2 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 font-medium outline-none"
                     value={settings.defaultFocusSeconds}
                     onChange={(event) => void updateSettings({ defaultFocusSeconds: Number(event.target.value) })}
                   >
@@ -614,10 +614,10 @@ export default function Home() {
                     <option value={90 * 60}>90 min</option>
                   </select>
                 </label>
-                <label className="block rounded-2xl bg-black/[0.03] px-4 py-3">
+                <label className="block rounded-2xl bg-[var(--surface-soft)] px-4 py-3">
                   <span>Theme</span>
                   <select
-                    className="mt-2 w-full rounded-xl border border-black/10 bg-white px-3 py-2 font-medium outline-none"
+                    className="mt-2 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 font-medium outline-none"
                     value={settings.theme}
                     onChange={(event) => void updateSettings({ theme: event.target.value as typeof settings.theme })}
                   >
@@ -626,20 +626,20 @@ export default function Home() {
                     <option value="dark">Dark</option>
                   </select>
                 </label>
-                <label className="flex items-center justify-between gap-4 rounded-2xl bg-black/[0.03] px-4 py-3">
+                <label className="flex items-center justify-between gap-4 rounded-2xl bg-[var(--surface-soft)] px-4 py-3">
                   <span>Browser notifications</span>
                   <input
                     type="checkbox"
                     checked={settings.enableNotifications}
                     onChange={(event) => void toggleNotifications(event.target.checked)}
-                    className="h-5 w-5 accent-black"
+                    className="h-5 w-5 accent-[var(--primary)]"
                   />
                 </label>
-                <p className="px-1 text-xs text-black/45">
+                <p className="px-1 text-xs text-[var(--muted)]">
                   Notification permission: {notificationStatus}. In-page completion panel remains primary.
                 </p>
                 <button
-                  className="w-full rounded-2xl bg-black px-4 py-3 text-sm font-medium text-white"
+                  className="w-full rounded-2xl bg-[var(--primary)] px-4 py-3 text-sm font-medium text-[var(--primary-foreground)]"
                   onClick={async () => {
                     const json = await exportJson();
                     const blob = new Blob([json], { type: "application/json" });
@@ -654,14 +654,14 @@ export default function Home() {
                   Export JSON
                 </button>
                 <button
-                  className="w-full rounded-2xl border border-black/10 px-4 py-3 text-sm font-medium"
+                  className="w-full rounded-2xl border border-[var(--border)] px-4 py-3 text-sm font-medium"
                   onClick={() => setShowImport((value) => !value)}
                 >
                   Import JSON
                 </button>
                 {showImport ? (
                   <form
-                    className="space-y-3 rounded-2xl border border-black/10 bg-black/[0.02] p-3"
+                    className="space-y-3 rounded-2xl border border-[var(--border)] bg-[var(--surface-soft)] p-3"
                     onSubmit={async (event) => {
                       event.preventDefault();
                       await importJson(importText);
@@ -671,16 +671,16 @@ export default function Home() {
                   >
                     <textarea
                       aria-label="Pomotree import JSON"
-                      className="min-h-32 w-full resize-none rounded-xl border border-black/10 bg-white p-3 text-xs outline-none placeholder:text-black/30"
+                      className="min-h-32 w-full resize-none rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-xs outline-none placeholder:text-[var(--placeholder)]"
                       value={importText}
                       onChange={(event) => setImportText(event.target.value)}
                       placeholder="Paste a Pomotree export JSON object"
                     />
                     <div className="flex gap-2">
-                      <button className="rounded-xl bg-black px-3 py-2 text-xs font-medium text-white">Restore data</button>
+                      <button className="rounded-xl bg-[var(--primary)] px-3 py-2 text-xs font-medium text-[var(--primary-foreground)]">Restore data</button>
                       <button
                         type="button"
-                        className="rounded-xl border border-black/10 px-3 py-2 text-xs font-medium"
+                        className="rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-medium"
                         onClick={() => {
                           setImportText("");
                           setShowImport(false);

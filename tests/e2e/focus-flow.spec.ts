@@ -257,6 +257,11 @@ test("settings and custom duration affect the next session", async ({ page }) =>
   await page.getByLabel("Default focus duration").selectOption(String(50 * 60));
   await page.getByLabel("Theme").selectOption("dark");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(page.locator("main")).toHaveCSS("background-color", "rgb(17, 17, 17)");
+  const focusPanel = page.locator('section.rounded-3xl:has-text("Current focus")');
+  await expect(focusPanel).toHaveCSS("background-color", "rgb(27, 27, 27)");
+  await expect(page.getByLabel("Intention without a task")).toHaveCSS("background-color", "rgb(27, 27, 27)");
+  await expect(page.getByRole("button", { name: "Start focus" })).toHaveCSS("color", "rgb(17, 17, 17)");
   const notifications = page.getByLabel("Browser notifications");
   await expect(notifications).toBeEnabled();
   await expect(page.locator("p", { hasText: "Notification permission:" })).toBeVisible();
