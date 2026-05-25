@@ -46,3 +46,6 @@ next-env.d.ts
 
 # code intelligence
 /.codegraph/
+
+# vercel local project link
+/.vercel/
