@@ -18,10 +18,10 @@ type ActionState = {
 const MENUBAR_WINDOW_WIDTH = 380;
 const MENUBAR_WINDOW_VERTICAL_PADDING = 24;
 const MENUBAR_HEIGHT_LIMITS: Record<MenubarMode, { min: number; max: number }> = {
-  idle: { min: 500, max: 560 },
-  running: { min: 420, max: 500 },
-  paused: { min: 480, max: 540 },
-  finishing: { min: 560, max: 620 },
+  idle: { min: 360, max: 430 },
+  running: { min: 400, max: 470 },
+  paused: { min: 430, max: 500 },
+  finishing: { min: 500, max: 580 },
 };
 
 function menubarMode(session: FocusSession | undefined): MenubarMode {
@@ -420,7 +420,7 @@ export function MenubarApp() {
 
   return (
     <main className="min-h-screen bg-[var(--background)] px-3 py-3 text-[var(--foreground)]">
-      <section ref={panelRef} className="mx-auto grid max-h-[600px] w-full max-w-[420px] gap-4 overflow-y-auto rounded-[20px] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[0_18px_45px_rgba(0,0,0,0.14)] sm:max-w-[380px]">
+      <section ref={panelRef} className="mx-auto grid max-h-[calc(100vh-24px)] w-full max-w-[420px] gap-4 overflow-y-auto rounded-[20px] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[0_18px_45px_rgba(0,0,0,0.14)] sm:max-w-[380px]">
         <header className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2">
             <span className="text-lg" aria-hidden="true">{header.icon}</span>
