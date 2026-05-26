@@ -5,15 +5,16 @@
   "identifier": "com.pomotree.menubar",
   "build": {
     "devUrl": "http://localhost:3000/menubar",
-    "frontendDist": "../.next",
-    "beforeDevCommand": "npm run dev -- --port 3000"
+    "frontendDist": "../out",
+    "beforeDevCommand": "npm run dev -- --port 3000",
+    "beforeBuildCommand": "NEXT_OUTPUT=export npm run build"
   },
   "app": {
     "windows": [
       {
         "label": "menubar",
         "title": "Pomotree",
-        "url": "/menubar",
+        "url": "menubar",
         "width": 380,
         "height": 560,
         "minWidth": 360,

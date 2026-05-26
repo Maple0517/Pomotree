@@ -11,7 +11,8 @@
     "test:watch": "vitest",
     "e2e": "playwright test",
     "tauri:dev": "tauri dev",
-    "tauri:build": "echo \"Tauri production packaging is not configured for this v0 spike. Choose static export or bundled local-server strategy first.\" && exit 1"
+    "tauri:dev:current": "tauri dev --config src-tauri/tauri.dev-current.conf.json",
+    "tauri:build": "tauri build"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.0",
