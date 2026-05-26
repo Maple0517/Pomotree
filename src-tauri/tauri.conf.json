@@ -16,17 +16,16 @@
         "title": "Pomotree",
         "url": "menubar",
         "width": 380,
-        "height": 560,
+        "height": 520,
         "minWidth": 360,
         "maxWidth": 420,
-        "minHeight": 420,
-        "maxHeight": 600,
+        "minHeight": 360,
+        "maxHeight": 620,
         "resizable": false,
         "maximizable": false,
         "fullscreen": false,
         "center": true,
-        "hiddenTitle": true,
-        "titleBarStyle": "Overlay"
+        "decorations": false
       }
     ],
     "security": {

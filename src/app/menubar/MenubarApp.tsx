@@ -1,18 +1,42 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, KeyboardEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { getTaskPathIds } from "@/lib/services/taskSelectors";
 import { useAppStore } from "@/lib/store/useAppStore";
 import { computeRemainingSeconds, formatClock } from "@/lib/utils/timer";
 import type { FocusSession, Task } from "@/types/domain";
 
 type DurationPreset = 25 | 50 | "custom";
+type MenubarMode = "idle" | "running" | "paused" | "finishing";
 
 type ActionState = {
   busy: boolean;
   message: string | null;
 };
+
+const MENUBAR_WINDOW_WIDTH = 380;
+const MENUBAR_WINDOW_VERTICAL_PADDING = 24;
+const MENUBAR_HEIGHT_LIMITS: Record<MenubarMode, { min: number; max: number }> = {
+  idle: { min: 500, max: 560 },
+  running: { min: 420, max: 500 },
+  paused: { min: 480, max: 540 },
+  finishing: { min: 560, max: 620 },
+};
+
+function menubarMode(session: FocusSession | undefined): MenubarMode {
+  if (session?.status === "running" || session?.status === "paused" || session?.status === "finishing") {
+    return session.status;
+  }
+
+  return "idle";
+}
+
+function targetWindowHeight(mode: MenubarMode, measuredPanelHeight: number) {
+  const limits = MENUBAR_HEIGHT_LIMITS[mode];
+  const contentHeight = Math.ceil(measuredPanelHeight + MENUBAR_WINDOW_VERTICAL_PADDING);
+  return Math.min(limits.max, Math.max(limits.min, contentHeight));
+}
 
 function taskPath(tasks: Task[], taskId: string | null | undefined) {
   if (!taskId) return null;
@@ -322,6 +346,7 @@ export function MenubarApp() {
   } = useAppStore();
   const [now, setNow] = useState(() => Date.now());
   const [action, setAction] = useState<ActionState>({ busy: false, message: null });
+  const panelRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     void hydrate();
@@ -339,8 +364,41 @@ export function MenubarApp() {
   }, [settings.theme]);
 
   const activeSession = sessions.find((session) => ["running", "paused", "finishing"].includes(session.status));
+  const mode = menubarMode(activeSession);
   const remainingSeconds = activeSession ? computeRemainingSeconds(activeSession, pauses, now) : settings.defaultFocusSeconds;
   const header = statusHeader(activeSession, remainingSeconds);
+
+  useEffect(() => {
+    if (!("__TAURI_INTERNALS__" in window) || !panelRef.current) return;
+
+    let animationFrame = 0;
+    let lastHeight = 0;
+    const panel = panelRef.current;
+
+    const resizeWindow = () => {
+      window.cancelAnimationFrame(animationFrame);
+      animationFrame = window.requestAnimationFrame(() => {
+        const nextHeight = targetWindowHeight(mode, panel.getBoundingClientRect().height);
+        if (Math.abs(nextHeight - lastHeight) < 1) return;
+
+        lastHeight = nextHeight;
+        void import("@tauri-apps/api/window")
+          .then(({ LogicalSize, getCurrentWindow }) => getCurrentWindow().setSize(new LogicalSize(MENUBAR_WINDOW_WIDTH, nextHeight)))
+          .catch(() => {
+            // Browser preview and older shells should keep rendering even if the Tauri window API is unavailable.
+          });
+      });
+    };
+
+    const observer = new ResizeObserver(resizeWindow);
+    observer.observe(panel);
+    resizeWindow();
+
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      observer.disconnect();
+    };
+  }, [mode, ready, loading, action.message]);
 
   useEffect(() => {
     if (activeSession?.status === "running" && remainingSeconds <= 0) {
@@ -362,7 +420,7 @@ export function MenubarApp() {
 
   return (
     <main className="min-h-screen bg-[var(--background)] px-3 py-3 text-[var(--foreground)]">
-      <section className="mx-auto grid max-h-[600px] w-full max-w-[420px] gap-4 overflow-y-auto rounded-[20px] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[0_18px_45px_rgba(0,0,0,0.14)] sm:max-w-[380px]">
+      <section ref={panelRef} className="mx-auto grid max-h-[600px] w-full max-w-[420px] gap-4 overflow-y-auto rounded-[20px] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[0_18px_45px_rgba(0,0,0,0.14)] sm:max-w-[380px]">
         <header className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2">
             <span className="text-lg" aria-hidden="true">{header.icon}</span>
