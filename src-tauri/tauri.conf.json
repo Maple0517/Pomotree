@@ -25,7 +25,8 @@
         "maximizable": false,
         "fullscreen": false,
         "center": true,
-        "decorations": false
+        "decorations": false,
+        "backgroundThrottling": "disabled"
       }
     ],
     "security": {

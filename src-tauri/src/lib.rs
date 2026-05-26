@@ -7,6 +7,7 @@ use tauri::{
 
 const MAIN_WINDOW_LABEL: &str = "menubar";
 const DASHBOARD_WINDOW_LABEL: &str = "dashboard";
+const TRAY_ID: &str = "pomotree-menubar";
 const SHOW_MENU_ID: &str = "show";
 const OPEN_DASHBOARD_MENU_ID: &str = "open_dashboard";
 const QUIT_MENU_ID: &str = "quit";
@@ -192,8 +193,24 @@ fn open_dashboard_window(app: &AppHandle) {
         .build();
 }
 
+#[tauri::command]
+fn set_menubar_status(app: AppHandle, title: String) -> Result<(), String> {
+    let title = title.trim();
+    let safe_title = if title.is_empty() {
+        "🍅".to_string()
+    } else {
+        title.chars().take(24).collect()
+    };
+
+    app.tray_by_id(TRAY_ID)
+        .ok_or_else(|| "Pomotree tray icon is unavailable".to_string())?
+        .set_title(Some(safe_title))
+        .map_err(|error| error.to_string())
+}
+
 pub fn run() {
     let app = tauri::Builder::default()
+        .invoke_handler(tauri::generate_handler![set_menubar_status])
         .setup(|app| {
             let show_item =
                 MenuItem::with_id(app, SHOW_MENU_ID, "Show Pomotree", true, None::<&str>)?;
@@ -216,7 +233,7 @@ pub fn run() {
                 ],
             )?;
 
-            TrayIconBuilder::new()
+            TrayIconBuilder::with_id(TRAY_ID)
                 .icon(app.default_window_icon().expect("missing app icon").clone())
                 .icon_as_template(true)
                 .tooltip("Pomotree")

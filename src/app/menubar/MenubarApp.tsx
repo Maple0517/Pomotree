@@ -53,6 +53,18 @@ function statusHeader(session: FocusSession | undefined, remainingSeconds: numbe
   return { icon: "🍅", text: formatClock(remainingSeconds) };
 }
 
+function menubarStatusTitle(session: FocusSession | undefined, remainingSeconds: number) {
+  if (!session) return "🍅";
+  if (session.status === "finishing") return "✅ Done";
+  if (session.status === "paused") return `⏸ ${formatClock(remainingSeconds)}`;
+  if (session.status === "running") return `🍅 ${formatClock(remainingSeconds)}`;
+  return "🍅";
+}
+
+function isTauriRuntime() {
+  return "__TAURI_INTERNALS__" in window;
+}
+
 function PrimaryButton({ children, disabled, onClick, type = "button" }: { children: React.ReactNode; disabled?: boolean; onClick?: () => void; type?: "button" | "submit" }) {
   return (
     <button
@@ -346,6 +358,7 @@ export function MenubarApp() {
   const [now, setNow] = useState(() => Date.now());
   const [action, setAction] = useState<ActionState>({ busy: false, message: null });
   const panelRef = useRef<HTMLElement | null>(null);
+  const lastMenubarStatusRef = useRef<string | null>(null);
 
   useEffect(() => {
     void hydrate();
@@ -376,6 +389,7 @@ export function MenubarApp() {
   const mode = menubarMode(activeSession);
   const remainingSeconds = activeSession ? computeRemainingSeconds(activeSession, pauses, now) : settings.defaultFocusSeconds;
   const header = statusHeader(activeSession, remainingSeconds);
+  const menubarStatus = menubarStatusTitle(activeSession, remainingSeconds);
 
   useEffect(() => {
     if (!("__TAURI_INTERNALS__" in window) || !panelRef.current) return;
@@ -408,6 +422,17 @@ export function MenubarApp() {
       observer.disconnect();
     };
   }, [mode, ready, loading, action.message]);
+
+  useEffect(() => {
+    if (!isTauriRuntime() || lastMenubarStatusRef.current === menubarStatus) return;
+
+    lastMenubarStatusRef.current = menubarStatus;
+    void import("@tauri-apps/api/core")
+      .then(({ invoke }) => invoke("set_menubar_status", { title: menubarStatus }))
+      .catch(() => {
+        lastMenubarStatusRef.current = null;
+      });
+  }, [menubarStatus]);
 
   useEffect(() => {
     if (activeSession?.status === "running" && remainingSeconds <= 0) {
