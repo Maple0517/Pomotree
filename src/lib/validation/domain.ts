@@ -10,17 +10,41 @@ function assertNonEmpty(value: string, message: string) {
 
 export function validateTaskRecord(task: Task) {
   assertNonEmpty(task.title, "Task title is required");
-  if (task.completedAt && task.status !== "done") {
+  const validPreviousStatus =
+    task.previousStatus === undefined ||
+    task.previousStatus === null ||
+    task.previousStatus === "todo" ||
+    task.previousStatus === "active" ||
+    task.previousStatus === "done";
+
+  if (!validPreviousStatus) {
+    throw new Error("previousStatus must be todo, active, done, null, or undefined");
+  }
+
+  if (task.status === "archived") {
+    if (!task.archivedAt) {
+      throw new Error("Archived tasks require archivedAt");
+    }
+    if (task.previousStatus !== "done" && task.completedAt) {
+      throw new Error("Only archived tasks previously done can keep completedAt");
+    }
+  } else {
+    if (task.previousStatus !== undefined && task.previousStatus !== null) {
+      throw new Error("previousStatus is only valid for archived tasks");
+    }
+    if (task.archivedAt) {
+      throw new Error("archivedAt is only valid for archived tasks");
+    }
+  }
+
+  if (task.completedAt && task.status !== "done" && !(task.status === "archived" && task.previousStatus === "done")) {
     throw new Error("completedAt is only valid for done tasks");
   }
   if (task.status === "done" && !task.completedAt) {
     throw new Error("Done tasks require completedAt");
   }
-  if (task.archivedAt && task.status !== "archived") {
-    throw new Error("archivedAt is only valid for archived tasks");
-  }
-  if (task.status === "archived" && !task.archivedAt) {
-    throw new Error("Archived tasks require archivedAt");
+  if (task.status !== "done" && task.status !== "archived" && task.completedAt) {
+    throw new Error("completedAt is only valid for done tasks");
   }
   if (!hasValidDate(task.createdAt) || !hasValidDate(task.updatedAt)) {
     throw new Error("Task timestamps must be valid ISO strings");

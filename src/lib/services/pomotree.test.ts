@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { createDefaultSettings } from "@/lib/db/defaults";
-import type { FocusSession, TimerPause } from "@/types/domain";
+import type { FocusSession, Task, TimerPause } from "@/types/domain";
 import {
   archiveTask,
   changeSessionAttribution,
@@ -13,18 +13,21 @@ import {
   discardSession,
   dismissInterruption,
   expireRunningSession,
+  exportJson,
+  importJson,
+  loadAppSnapshot,
   markInterruptionDone,
   moveTask,
   pauseSession,
+  repairArchivedSubtrees,
   requestFinish,
   restoreActiveSession,
+  restoreTaskBranch,
   resumeSession,
   saveFinish,
   startFocus,
   updateSettings,
   updateTask,
-  exportJson,
-  importJson,
 } from "./pomotree";
 
 async function seedSettings(overrides: Partial<ReturnType<typeof createDefaultSettings>> = {}) {
@@ -65,9 +68,10 @@ function makePause(overrides: Partial<TimerPause> = {}): TimerPause {
 }
 
 describe("pomotree service invariants", () => {
-  it("creates, updates, archives, and move-protects task trees", async () => {
+  it("archives and restores an entire subtree and keeps move protections", async () => {
     const parent = await createTask(" Parent ");
     const child = await createTask("Child", parent.id);
+    const grandchild = await createTask("Grandchild", child.id);
 
     await expect(updateTask(child.id, { title: "" })).rejects.toThrow("Task title is required");
     await expect(moveTask(parent.id, child.id)).rejects.toThrow("descendants");
@@ -78,7 +82,19 @@ describe("pomotree service invariants", () => {
 
     const archived = await archiveTask(parent.id);
     expect(archived.status).toBe("archived");
+    expect((await db.tasks.get(parent.id))?.previousStatus).toBe("todo");
+    expect((await db.tasks.get(child.id))?.previousStatus).toBe("done");
+    expect((await db.tasks.get(grandchild.id))?.status).toBe("archived");
     await expect(createTask("Blocked", parent.id)).rejects.toThrow("archived");
+    await expect(updateTask(parent.id, { status: "archived" })).rejects.toThrow("Use archiveTask");
+    await expect(moveTask(parent.id, null)).rejects.toThrow("Restore the archived branch before moving it");
+
+    const restored = await restoreTaskBranch(parent.id);
+    expect(restored.status).toBe("todo");
+    expect((await db.tasks.get(parent.id))?.previousStatus).toBeNull();
+    expect((await db.tasks.get(child.id))?.status).toBe("done");
+    expect((await db.tasks.get(child.id))?.completedAt).toBeTruthy();
+    expect((await db.tasks.get(grandchild.id))?.status).toBe("todo");
   });
 
   it("creates task paths atomically and rejects empty path segments", async () => {
@@ -134,6 +150,79 @@ describe("pomotree service invariants", () => {
     await expect(saveFinish({ status: "completed", taskId: archived.id })).rejects.toThrow("archived");
   });
 
+  it("rejects marking an archived task done while finishing a legacy archived session", async () => {
+    await seedSettings();
+    const archivedTask: Task = {
+      id: "archived-mark-done",
+      parentId: null,
+      title: "Archived mark done",
+      status: "archived",
+      previousStatus: "todo",
+      sortOrder: 0,
+      createdAt: "2026-05-25T10:00:00.000Z",
+      updatedAt: "2026-05-25T10:00:00.000Z",
+      archivedAt: "2026-05-25T10:00:00.000Z",
+    };
+
+    await db.tasks.put(archivedTask);
+    await db.focusSessions.put(
+      makeSession({
+        id: "legacy-mark-done-session",
+        taskId: archivedTask.id,
+        originalTaskId: archivedTask.id,
+        taskPathSnapshot: archivedTask.title,
+        originalTaskPathSnapshot: archivedTask.title,
+        status: "finishing",
+        intention: null,
+      }),
+    );
+
+    await expect(saveFinish({ status: "completed", markTaskDone: true })).rejects.toThrow(
+      "Restore the archived branch before marking it done",
+    );
+    expect((await db.tasks.get(archivedTask.id))?.status).toBe("archived");
+    expect((await db.focusSessions.get("legacy-mark-done-session"))?.status).toBe("finishing");
+  });
+
+  it("blocks archiving a branch used by the active session", async () => {
+    await seedSettings();
+    const task = await createTask("Active branch");
+    await startFocus(task.id);
+    await expect(archiveTask(task.id)).rejects.toThrow("Cannot archive a branch used by the active session");
+  });
+
+  it("allows saving a finishing session that is already attributed to an archived task in legacy data", async () => {
+    await seedSettings();
+    const archivedTask: Task = {
+      id: "archived-task",
+      parentId: null,
+      title: "Archived finish target",
+      status: "archived",
+      previousStatus: "todo",
+      sortOrder: 0,
+      createdAt: "2026-05-25T10:00:00.000Z",
+      updatedAt: "2026-05-25T10:00:00.000Z",
+      archivedAt: "2026-05-25T10:00:00.000Z",
+    };
+    const session = makeSession({
+      id: "legacy-finishing",
+      taskId: archivedTask.id,
+      originalTaskId: archivedTask.id,
+      taskPathSnapshot: archivedTask.title,
+      originalTaskPathSnapshot: archivedTask.title,
+      status: "finishing",
+      intention: null,
+    });
+
+    await db.tasks.put(archivedTask);
+    await db.focusSessions.put(session);
+    const saved = await saveFinish({ status: "completed", summary: "done" });
+
+    expect(saved.taskId).toBe(archivedTask.id);
+    expect(saved.status).toBe("completed");
+    await expect(saveFinish({ status: "completed", markTaskDone: true })).rejects.toThrow("No finishing session");
+  });
+
   it("keeps saved history snapshots stable after task rename", async () => {
     await seedSettings();
     const task = await createTask("Original name");
@@ -168,6 +257,41 @@ describe("pomotree service invariants", () => {
 
     expect((await db.tasks.get(parent.id))?.status).toBe("done");
     expect((await db.tasks.get(child.id))?.status).toBe("todo");
+  });
+
+  it("keeps focus history unchanged across archive and restore", async () => {
+    await seedSettings();
+    const parent = await createTask("History parent");
+    const child = await createTask("History child", parent.id);
+
+    await startFocus(child.id);
+    await requestFinish();
+    await saveFinish({ status: "completed", summary: "history check" });
+    const before = await db.focusSessions.toArray();
+
+    await archiveTask(parent.id);
+    await restoreTaskBranch(parent.id);
+
+    expect(await db.focusSessions.toArray()).toEqual(before);
+  });
+
+  it("restores only archived branch roots", async () => {
+    const parent = await createTask("Archive root");
+    const child = await createTask("Archive child", parent.id);
+    await archiveTask(parent.id);
+
+    await expect(restoreTaskBranch(child.id)).rejects.toThrow("Restore the archived branch root instead");
+  });
+
+  it("ignores archived siblings when creating task paths", async () => {
+    const archivedProject = await createTask("Project");
+    await archiveTask(archivedProject.id);
+
+    const leaf = await createTaskPath("Project / New");
+    const rootProjects = (await db.tasks.toArray()).filter((task) => task.parentId === null && task.title === "Project");
+
+    expect(rootProjects).toHaveLength(2);
+    expect(rootProjects.find((task) => task.id === leaf.parentId)?.status).toBe("todo");
   });
 
   it("computes wall-clock elapsed time with pauses and closes open pauses on resume", async () => {
@@ -291,6 +415,81 @@ describe("pomotree service invariants", () => {
 
     expect(await db.tasks.toArray()).toEqual([importedTask]);
     expect((await db.userSettings.get("local"))?.defaultFocusSeconds).toBe(50 * 60);
+  });
+
+  it("repairs archived subtrees during import and snapshot load", async () => {
+    const parent: Task = {
+      id: "archived-parent",
+      parentId: null,
+      title: "Archived parent",
+      status: "archived",
+      previousStatus: "todo",
+      sortOrder: 0,
+      createdAt: "2026-05-26T00:00:00.000Z",
+      updatedAt: "2026-05-26T00:00:00.000Z",
+      archivedAt: "2026-05-26T00:00:00.000Z",
+    };
+    const child: Task = {
+      id: "active-child",
+      parentId: parent.id,
+      title: "Active child",
+      status: "active",
+      sortOrder: 0,
+      createdAt: "2026-05-26T00:00:00.000Z",
+      updatedAt: "2026-05-26T00:00:00.000Z",
+    };
+
+    const repaired = repairArchivedSubtrees([parent, child]);
+    expect(repaired.find((task) => task.id === child.id)?.status).toBe("archived");
+    expect(repaired.find((task) => task.id === child.id)?.previousStatus).toBe("active");
+
+    await importJson({
+      schemaVersion: 1,
+      exportedAt: "2026-05-26T00:00:00.000Z",
+      tasks: [parent, child],
+      focusSessions: [],
+      timerPauses: [],
+      interruptions: [],
+      userSettings: createDefaultSettings(),
+    });
+
+    expect((await db.tasks.get(child.id))?.status).toBe("archived");
+    await db.tasks.clear();
+    await db.tasks.bulkPut([parent, child]);
+
+    const snapshot = await loadAppSnapshot();
+    expect(snapshot.tasks.find((task) => task.id === child.id)?.status).toBe("archived");
+    expect((await db.tasks.get(child.id))?.previousStatus).toBe("active");
+  });
+
+  it("rejects invalid previousStatus imports without clearing existing data", async () => {
+    await createTask("Keep me");
+
+    await expect(
+      importJson({
+        schemaVersion: 1,
+        exportedAt: "2026-05-26T00:00:00.000Z",
+        tasks: [
+          {
+            id: "bad-task",
+            parentId: null,
+            title: "Bad",
+            status: "archived",
+            previousStatus: "archived",
+            sortOrder: 0,
+            createdAt: "2026-05-26T00:00:00.000Z",
+            updatedAt: "2026-05-26T00:00:00.000Z",
+            archivedAt: "2026-05-26T00:00:00.000Z",
+          },
+        ],
+        focusSessions: [],
+        timerPauses: [],
+        interruptions: [],
+        userSettings: createDefaultSettings(),
+      }),
+    ).rejects.toThrow("previousStatus");
+
+    expect((await db.tasks.toArray()).map((task) => task.title)).toEqual(["Keep me"]);
   });
 
   it("rejects invalid imports without clearing existing data", async () => {

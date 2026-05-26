@@ -1,5 +1,6 @@
 import { db, ensureDefaultSettings } from "@/lib/db";
 import { createDefaultSettings } from "@/lib/db/defaults";
+import { isArchivedBranchRoot } from "@/lib/services/taskSelectors";
 import { createId, nowIso } from "@/lib/utils/time";
 import {
   validateFocusSessionRecord,
@@ -8,7 +9,7 @@ import {
   validateTimerPauseRecord,
   validateUserSettingsRecord,
 } from "@/lib/validation/domain";
-import type { FocusSession, Interruption, Task, TimerPause, UserSettings } from "@/types/domain";
+import type { FocusSession, Interruption, RestorableTaskStatus, Task, TimerPause, UserSettings } from "@/types/domain";
 
 export interface PomotreeExport {
   schemaVersion: 1;
@@ -146,12 +147,26 @@ function assertTaskCanReceiveFocus(task: Task | null | undefined) {
   if (task.status === "archived") throw new Error("Cannot focus or attribute time to an archived task");
 }
 
-function normalizeTaskStatus(status: Task["status"], now: string) {
+function assertTaskCanBeAssignedForFinish(task: Task | null | undefined) {
+  if (!task) throw new Error("Task not found");
+  if (task.status === "archived") throw new Error("Cannot reattribute a finished session to an archived task");
+}
+
+function normalizeTaskStatus(status: Exclude<Task["status"], "archived">, now: string) {
   return {
     status,
     completedAt: status === "done" ? now : null,
-    archivedAt: status === "archived" ? now : null,
+    archivedAt: null,
+    previousStatus: null,
   };
+}
+
+function toRestorableStatus(status: Task["status"]): RestorableTaskStatus {
+  if (status === "archived") {
+    throw new Error("Archived status cannot be used as previousStatus");
+  }
+
+  return status;
 }
 
 export function getSubtreeTaskIds(tasks: Task[], taskId: string) {
@@ -265,17 +280,24 @@ export async function restoreActiveSession(): Promise<RecoveryNotice | null> {
 export async function loadAppSnapshot(): Promise<AppSnapshot> {
   await ensureDefaultSettings();
   const recoveryNotice = await restoreActiveSession();
-  const [settings, tasks, sessions, interruptions, pauses] = await Promise.all([
+  const [settings, rawTasks, sessions, interruptions, pauses] = await Promise.all([
     db.userSettings.get("local"),
     db.tasks.orderBy("sortOrder").toArray(),
     db.focusSessions.orderBy("createdAt").reverse().toArray(),
     db.interruptions.orderBy("createdAt").reverse().toArray(),
     db.timerPauses.toArray(),
   ]);
+  const repairedTasks = repairArchivedSubtrees(rawTasks);
+
+  if (repairedTasks.some((task, index) => task !== rawTasks[index])) {
+    await db.transaction("rw", db.tasks, async () => {
+      await db.tasks.bulkPut(repairedTasks);
+    });
+  }
 
   return {
     settings: settings ?? createDefaultSettings(),
-    tasks,
+    tasks: repairedTasks,
     sessions,
     interruptions,
     pauses,
@@ -322,7 +344,9 @@ export async function createTaskPath(path: string) {
 
   await db.transaction("rw", db.tasks, async () => {
     for (const title of parts) {
-      const siblings = await db.tasks.filter((task) => task.parentId === parentId && task.title.toLowerCase() === title.toLowerCase()).toArray();
+      const siblings = await db.tasks
+        .filter((task) => task.parentId === parentId && task.status !== "archived" && task.title.toLowerCase() === title.toLowerCase())
+        .toArray();
       current = siblings[0];
       if (!current) {
         const existing = parentId
@@ -353,25 +377,92 @@ export async function createTaskPath(path: string) {
 }
 
 export async function archiveTask(taskId: string) {
-  const task = await db.tasks.get(taskId);
-  if (!task) throw new Error("Task not found");
+  return db.transaction("rw", db.tasks, db.focusSessions, async () => {
+    const tasks = await db.tasks.orderBy("sortOrder").toArray();
+    const task = tasks.find((item) => item.id === taskId);
+    if (!task) throw new Error("Task not found");
 
-  const now = nowIso();
-  const updated: Task = {
-    ...task,
-    status: "archived",
-    archivedAt: now,
-    updatedAt: now,
-  };
+    const subtreeIds = getSubtreeTaskIds(tasks, taskId);
+    const activeSessions = await db.focusSessions.filter((session) => isActiveStatus(session.status)).toArray();
+    if (activeSessions.some((session) => session.taskId && subtreeIds.has(session.taskId))) {
+      throw new Error("Cannot archive a branch used by the active session");
+    }
 
-  validateTaskRecord(updated);
-  await db.tasks.put(updated);
-  return updated;
+    const now = nowIso();
+    const updatedTasks = tasks.map((item) => {
+      if (!subtreeIds.has(item.id)) return item;
+      if (item.status === "archived") return item;
+
+      const previousStatus = toRestorableStatus(item.status);
+      const updated: Task = {
+        ...item,
+        status: "archived",
+        previousStatus,
+        archivedAt: now,
+        completedAt: previousStatus === "done" ? item.completedAt ?? now : null,
+        updatedAt: now,
+      };
+
+      validateTaskRecord(updated);
+      return updated;
+    });
+
+    const changedTasks = updatedTasks.filter((item, index) => item !== tasks[index]);
+    if (changedTasks.length > 0) {
+      await db.tasks.bulkPut(changedTasks);
+    }
+
+    return updatedTasks.find((item) => item.id === taskId)!;
+  });
+}
+
+export async function restoreTaskBranch(taskId: string) {
+  return db.transaction("rw", db.tasks, async () => {
+    const tasks = await db.tasks.orderBy("sortOrder").toArray();
+    const task = tasks.find((item) => item.id === taskId);
+    if (!task) throw new Error("Task not found");
+    if (task.status !== "archived") throw new Error("Task is not archived");
+    if (!isArchivedBranchRoot(task, tasks)) {
+      throw new Error("Restore the archived branch root instead");
+    }
+
+    const subtreeIds = getSubtreeTaskIds(tasks, taskId);
+    const now = nowIso();
+    const updatedTasks = tasks.map((item) => {
+      if (!subtreeIds.has(item.id) || item.status !== "archived") return item;
+
+      const restoredStatus = item.previousStatus ?? "todo";
+      const updated: Task = {
+        ...item,
+        status: restoredStatus,
+        previousStatus: null,
+        archivedAt: null,
+        completedAt: restoredStatus === "done" ? item.completedAt ?? now : null,
+        updatedAt: now,
+      };
+
+      validateTaskRecord(updated);
+      return updated;
+    });
+
+    const changedTasks = updatedTasks.filter((item, index) => item !== tasks[index]);
+    if (changedTasks.length > 0) {
+      await db.tasks.bulkPut(changedTasks);
+    }
+
+    return updatedTasks.find((item) => item.id === taskId)!;
+  });
 }
 
 export async function updateTask(taskId: string, input: { title?: string; description?: string | null; status?: Task["status"] }) {
   const task = await db.tasks.get(taskId);
   if (!task) throw new Error("Task not found");
+  if (input.status === "archived") {
+    throw new Error("Use archiveTask to archive a branch");
+  }
+  if (task.status === "archived" && input.status !== undefined) {
+    throw new Error("Restore the archived branch before editing status");
+  }
 
   const normalizedTitle = input.title?.trim();
   if (input.title !== undefined && !normalizedTitle) {
@@ -397,6 +488,9 @@ export async function moveTask(taskId: string, parentId: string | null) {
   const task = await db.tasks.get(taskId);
   if (!task) throw new Error("Task not found");
   if (task.id === parentId) throw new Error("Cannot move a task under itself");
+  if (task.status === "archived") {
+    throw new Error("Restore the archived branch before moving it");
+  }
 
   if (parentId) {
     assertParentIsValid(await db.tasks.get(parentId));
@@ -600,7 +694,7 @@ export async function changeSessionAttribution(sessionId: string, taskId: string
   }
 
   const task = taskId ? await db.tasks.get(taskId) : null;
-  if (taskId) assertTaskCanReceiveFocus(task);
+  if (taskId) assertTaskCanBeAssignedForFinish(task);
   if (!taskId && !session.intention?.trim()) throw new Error("Session must keep a task or intention");
 
   const now = nowIso();
@@ -621,16 +715,25 @@ export async function saveFinish(input: { status: "completed" | "partial"; summa
   if (!session) throw new Error("No finishing session to save");
 
   const task = input.taskId === undefined ? undefined : input.taskId ? await db.tasks.get(input.taskId) : null;
-  if (input.taskId) assertTaskCanReceiveFocus(task);
+  const isPreservingExistingAttribution = input.taskId === undefined || input.taskId === session.taskId;
+  if (input.taskId && !isPreservingExistingAttribution) {
+    assertTaskCanBeAssignedForFinish(task);
+  }
   const pauses = await db.timerPauses.where("sessionId").equals(session.id).toArray();
   const now = nowIso();
   const actualSeconds = computeElapsedSeconds(session, pauses);
 
   const finalTaskId = input.taskId === undefined ? session.taskId : task?.id ?? null;
-  const finalPath = input.taskId === undefined ? session.taskPathSnapshot : await computeTaskPath(task?.id ?? null);
+  const finalPath =
+    input.taskId === undefined || (isPreservingExistingAttribution && input.taskId === session.taskId)
+      ? session.taskPathSnapshot
+      : await computeTaskPath(task?.id ?? null);
   if (!finalTaskId && !session.intention?.trim()) throw new Error("Session must keep a task or intention");
   const taskToMarkDone = input.markTaskDone && finalTaskId ? await db.tasks.get(finalTaskId) : null;
   if (input.markTaskDone && finalTaskId && !taskToMarkDone) throw new Error("Task not found");
+  if (input.markTaskDone && taskToMarkDone?.status === "archived") {
+    throw new Error("Restore the archived branch before marking it done");
+  }
 
   const saved: FocusSession = {
     ...session,
@@ -677,6 +780,12 @@ export async function exportJson(): Promise<PomotreeExport> {
 
 export async function importJson(input: string | unknown): Promise<AppSnapshot> {
   const exportData = parsePomotreeExport(input);
+  const repairedTasks = repairArchivedSubtrees(exportData.tasks);
+  const repairedExport = {
+    ...exportData,
+    tasks: repairedTasks,
+  };
+  validatePomotreeExport(repairedExport);
 
   await db.transaction("rw", [db.tasks, db.focusSessions, db.timerPauses, db.interruptions, db.userSettings], async () => {
     await db.tasks.clear();
@@ -684,11 +793,11 @@ export async function importJson(input: string | unknown): Promise<AppSnapshot> 
     await db.timerPauses.clear();
     await db.interruptions.clear();
     await db.userSettings.clear();
-    await db.tasks.bulkPut(exportData.tasks);
-    await db.focusSessions.bulkPut(exportData.focusSessions);
-    await db.timerPauses.bulkPut(exportData.timerPauses);
-    await db.interruptions.bulkPut(exportData.interruptions);
-    await db.userSettings.put(exportData.userSettings);
+    await db.tasks.bulkPut(repairedExport.tasks);
+    await db.focusSessions.bulkPut(repairedExport.focusSessions);
+    await db.timerPauses.bulkPut(repairedExport.timerPauses);
+    await db.interruptions.bulkPut(repairedExport.interruptions);
+    await db.userSettings.put(repairedExport.userSettings);
   });
 
   return loadAppSnapshot();
@@ -801,4 +910,45 @@ export async function convertInterruptionToTask(interruptionId: string, parentId
   });
 
   return { task, interruption: converted };
+}
+
+export function repairArchivedSubtrees(tasks: Task[]) {
+  const byId = new Map(tasks.map((task) => [task.id, task]));
+  const now = nowIso();
+
+  const findArchivedAncestor = (task: Task) => {
+    const seen = new Set<string>();
+    let current = task.parentId ? byId.get(task.parentId) : undefined;
+
+    while (current) {
+      if (seen.has(current.id)) {
+        throw new Error("Task tree cycle detected");
+      }
+      seen.add(current.id);
+      if (current.status === "archived") return current;
+      current = current.parentId ? byId.get(current.parentId) : undefined;
+    }
+
+    return undefined;
+  };
+
+  return tasks.map((task) => {
+    if (task.status === "archived") return task;
+
+    const archivedAncestor = findArchivedAncestor(task);
+    if (!archivedAncestor) return task;
+
+    const previousStatus = toRestorableStatus(task.status);
+    const repaired: Task = {
+      ...task,
+      status: "archived",
+      previousStatus,
+      archivedAt: archivedAncestor.archivedAt ?? now,
+      completedAt: previousStatus === "done" ? task.completedAt ?? now : null,
+      updatedAt: now,
+    };
+
+    validateTaskRecord(repaired);
+    return repaired;
+  });
 }

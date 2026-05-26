@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { getActiveTaskRows, getArchivedBranchRoots, getAutoExpandedTaskIds, getTaskChildrenMap, getTaskRows } from "@/lib/services/taskSelectors";
 import { useAppStore } from "@/lib/store/useAppStore";
 import { computeRemainingSeconds, formatClock } from "@/lib/utils/timer";
 import { formatDuration, getTaskStats, getTodayStats } from "@/lib/services/stats";
@@ -13,8 +14,11 @@ export default function Home() {
     interruptions,
     hydrate,
     updateSettings,
+    createTask,
     createTaskPath,
     updateTask,
+    archiveTask,
+    restoreTaskBranch,
     changeSessionAttribution,
     moveTask,
     startFocus,
@@ -46,10 +50,15 @@ export default function Home() {
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editingTaskTitle, setEditingTaskTitle] = useState("");
   const [editingParentId, setEditingParentId] = useState("");
+  const [addingSubtaskParentId, setAddingSubtaskParentId] = useState<string | null>(null);
+  const [subtaskTitle, setSubtaskTitle] = useState("");
+  const [expandedTaskOverrides, setExpandedTaskOverrides] = useState<Record<string, boolean>>({});
+  const [showArchivedTasks, setShowArchivedTasks] = useState(true);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editingSessionTaskId, setEditingSessionTaskId] = useState("");
   const [notificationStatus, setNotificationStatus] = useState<NotificationPermission | "unsupported">("unsupported");
   const lastNotifiedSessionIdRef = useRef<string | null>(null);
+  const taskInputRef = useRef<HTMLInputElement | null>(null);
   const [importText, setImportText] = useState("");
   const [showImport, setShowImport] = useState(false);
   const [now, setNow] = useState(() => Date.now());
@@ -78,33 +87,66 @@ export default function Home() {
     }, 0);
   }, []);
 
+  useEffect(() => {
+    const closeOpenMenus = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+
+      document.querySelectorAll<HTMLDetailsElement>("details[open]").forEach((details) => {
+        if (!details.contains(target)) {
+          details.removeAttribute("open");
+        }
+      });
+    };
+
+    document.addEventListener("pointerdown", closeOpenMenus);
+    return () => document.removeEventListener("pointerdown", closeOpenMenus);
+  }, []);
 
   const activeSession = sessions.find((session) => ["running", "paused", "finishing"].includes(session.status));
+  const activeTask = activeSession?.taskId ? tasks.find((task) => task.id === activeSession.taskId) : undefined;
+  const activeTaskRows = useMemo(() => getActiveTaskRows(tasks), [tasks]);
+  const activeTaskChildrenMap = useMemo(() => getTaskChildrenMap(tasks, { includeArchived: false }), [tasks]);
+  const archivedBranchRoots = useMemo(() => getArchivedBranchRoots(tasks), [tasks]);
+  const firstActiveTaskId = activeTaskRows[0]?.task.id ?? null;
+  const defaultTaskId = activeSession?.taskId ?? firstActiveTaskId;
+  const effectiveTaskId = selectedTaskId === undefined ? defaultTaskId : selectedTaskId;
+  const finishTaskId = selectedTaskId === undefined ? undefined : selectedTaskId;
+  const activeSessionHasArchivedAttribution = activeTask?.status === "archived";
+  const selectedTask = effectiveTaskId ? tasks.find((task) => task.id === effectiveTaskId) : undefined;
+  const canMarkSelectedTaskDone = Boolean(selectedTask && selectedTask.status !== "archived");
+  const autoExpandedTaskIds = useMemo(
+    () => getAutoExpandedTaskIds(tasks, [effectiveTaskId, activeSession?.taskId]),
+    [activeSession?.taskId, effectiveTaskId, tasks],
+  );
+  const activeTaskIdSet = useMemo(() => new Set(tasks.filter((task) => task.status !== "archived").map((task) => task.id)), [tasks]);
+  const effectiveAddingSubtaskParentId = addingSubtaskParentId && activeTaskIdSet.has(addingSubtaskParentId) ? addingSubtaskParentId : null;
+  const expandedTaskIds = useMemo(() => {
+    const expanded = new Set<string>(autoExpandedTaskIds);
 
-  const effectiveTaskId = selectedTaskId === undefined ? activeSession?.taskId ?? tasks[0]?.id ?? null : selectedTaskId;
-
-  const visibleTasks = useMemo(() => {
-    const byParent = new Map<string, typeof tasks>();
     for (const task of tasks) {
-      const key = task.parentId ?? "root";
-      byParent.set(key, [...(byParent.get(key) ?? []), task]);
+      if (task.status === "archived") continue;
+
+      const hasChildren = (activeTaskChildrenMap.get(task.id)?.length ?? 0) > 0;
+      if (!hasChildren) continue;
+
+      const override = activeTaskIdSet.has(task.id) ? expandedTaskOverrides[task.id] : undefined;
+      const shouldExpand = override === true || (override !== false && task.parentId === null);
+      if (shouldExpand) {
+        expanded.add(task.id);
+      }
     }
 
-    const rows: Array<{ task: (typeof tasks)[number]; depth: number }> = [];
-    const visit = (parentId: string | null, depth: number) => {
-      const key = parentId ?? "root";
-      for (const task of byParent.get(key) ?? []) {
-        rows.push({ task, depth });
-        visit(task.id, depth + 1);
-      }
-    };
-    visit(null, 0);
-    return rows;
-  }, [tasks]);
+    return expanded;
+  }, [activeTaskChildrenMap, activeTaskIdSet, autoExpandedTaskIds, expandedTaskOverrides, tasks]);
+  const visibleTaskRows = useMemo(
+    () => getTaskRows(tasks, { includeArchived: false, expandedTaskIds, defaultExpandedDepth: -1 }),
+    [expandedTaskIds, tasks],
+  );
 
   const activeTaskTitle = activeSession?.intention
     ? activeSession.intention
-    : tasks.find((task) => task.id === effectiveTaskId)?.title ?? "No task selected";
+    : activeSession?.taskPathSnapshot ?? tasks.find((task) => task.id === effectiveTaskId)?.title ?? "No task selected";
   const customPlannedSeconds = plannedMinutes.trim() ? Math.max(1, Number(plannedMinutes)) * 60 : undefined;
   const previewPlannedSeconds = customPlannedSeconds ?? settings.defaultFocusSeconds;
   const remainingSeconds = activeSession ? computeRemainingSeconds(activeSession, pauses, now) : previewPlannedSeconds;
@@ -128,7 +170,8 @@ export default function Home() {
   }, [sessions, tasks]);
   const recentSessions = sessions.filter((session) => ["completed", "partial"].includes(session.status)).slice(0, 5);
   const openInterruptions = interruptions.filter((interruption) => interruption.status === "open");
-  const canStartFocus = Boolean(effectiveTaskId ?? focusIntention.trim());
+  const canStartFocus = Boolean((effectiveTaskId && selectedTask?.status !== "done") || focusIntention.trim());
+
   const editableParentOptions = useMemo(() => {
     if (!editingTaskId) return [];
     const excluded = new Set<string>();
@@ -139,8 +182,15 @@ export default function Home() {
       }
     };
     collect(editingTaskId);
-    return visibleTasks.filter(({ task }) => !excluded.has(task.id) && task.status !== "archived");
-  }, [editingTaskId, tasks, visibleTasks]);
+    return activeTaskRows.filter(({ task }) => !excluded.has(task.id));
+  }, [activeTaskRows, editingTaskId, tasks]);
+
+  const toggleTaskExpansion = (taskId: string) => {
+    setExpandedTaskOverrides((current) => ({
+      ...current,
+      [taskId]: !expandedTaskIds.has(taskId),
+    }));
+  };
 
   const beginEditTask = (task: (typeof tasks)[number]) => {
     setEditingTaskId(task.id);
@@ -157,9 +207,25 @@ export default function Home() {
     setEditingParentId("");
   };
 
+  const saveInlineSubtask = async () => {
+    if (!effectiveAddingSubtaskParentId) return;
+    await createTask(subtaskTitle, effectiveAddingSubtaskParentId);
+    setExpandedTaskOverrides((current) => ({
+      ...current,
+      [effectiveAddingSubtaskParentId]: true,
+    }));
+    setAddingSubtaskParentId(null);
+    setSubtaskTitle("");
+  };
+
   const beginEditSession = (session: (typeof sessions)[number]) => {
     setEditingSessionId(session.id);
     setEditingSessionTaskId(session.taskId ?? "");
+  };
+
+  const saveInterruptionNote = async () => {
+    await createInterruption(interruptionText);
+    setInterruptionText("");
   };
 
   const saveSessionAttribution = async () => {
@@ -206,8 +272,8 @@ export default function Home() {
           </p>
         ) : null}
 
-        <section className="grid flex-1 gap-6 py-6 lg:grid-cols-[1.2fr_0.8fr] xl:grid-cols-[1.35fr_0.65fr]">
-          <div className="grid gap-6">
+        <section className="grid flex-1 items-start gap-6 py-6 lg:grid-cols-[1.2fr_0.8fr] xl:grid-cols-[1.35fr_0.65fr]">
+          <div className="grid content-start gap-6">
             <section className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_1px_0_var(--shadow-line)]">
               <div className="flex items-start justify-between gap-4">
                 <div>
@@ -278,8 +344,13 @@ export default function Home() {
                   onChange={(event) => setSelectedTaskId(event.target.value || null)}
                   className="mt-2 w-full rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm outline-none"
                 >
+                  {activeSessionHasArchivedAttribution && activeSession?.taskId ? (
+                    <option value={activeSession.taskId} disabled>
+                      {`Current archived attribution: ${activeSession.taskPathSnapshot ?? activeTask?.title ?? "Unknown task"}`}
+                    </option>
+                  ) : null}
                   <option value="">Unassigned / intention</option>
-                  {visibleTasks.map(({ task, depth }) => (
+                  {activeTaskRows.map(({ task, depth }) => (
                     <option key={task.id} value={task.id}>
                       {`${"— ".repeat(depth)}${task.title}`}
                     </option>
@@ -327,7 +398,7 @@ export default function Home() {
                     className="mt-3 min-h-24 w-full resize-none rounded-2xl border border-[var(--warning-border)] bg-[var(--surface)] p-3 text-sm outline-none placeholder:text-[var(--placeholder)]"
                     placeholder="What did you actually complete? Summary is optional for MVP."
                   />
-                  {effectiveTaskId ? (
+                  {canMarkSelectedTaskDone ? (
                     <label className="mt-3 flex items-center justify-between gap-4 rounded-2xl bg-[var(--surface)] px-3 py-2 text-sm text-[var(--warning-text)]">
                       <span>Mark attributed task done</span>
                       <input
@@ -341,13 +412,13 @@ export default function Home() {
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button
                       className="rounded-full bg-[var(--primary)] px-4 py-2 text-sm font-medium text-[var(--primary-foreground)]"
-                      onClick={() => void saveFinish({ status: "completed", summary, taskId: effectiveTaskId, markTaskDone }).then(() => { setSummary(""); setSelectedTaskId(undefined); setMarkTaskDone(false); })}
+                      onClick={() => void saveFinish({ status: "completed", summary, taskId: finishTaskId, markTaskDone }).then(() => { setSummary(""); setSelectedTaskId(undefined); setMarkTaskDone(false); })}
                     >
                       Save completed
                     </button>
                     <button
                       className="rounded-full border border-[var(--border)] px-4 py-2 text-sm font-medium"
-                      onClick={() => void saveFinish({ status: "partial", summary, taskId: effectiveTaskId, markTaskDone }).then(() => { setSummary(""); setSelectedTaskId(undefined); setMarkTaskDone(false); })}
+                      onClick={() => void saveFinish({ status: "partial", summary, taskId: finishTaskId, markTaskDone }).then(() => { setSummary(""); setSelectedTaskId(undefined); setMarkTaskDone(false); })}
                     >
                       Save partial
                     </button>
@@ -356,14 +427,19 @@ export default function Home() {
               ) : null}
             </section>
 
-            <section className="grid gap-4 md:grid-cols-[0.95fr_1.05fr]">
-              <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold">Task tree</h3>
-                  <button className="text-sm font-medium text-[var(--muted)]">+ Task</button>
+            <div className="grid gap-6">
+              <section className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_1px_0_var(--shadow-line)]">
+                <div className="flex items-center justify-between gap-4">
+                  <h3 className="text-lg font-semibold tracking-tight">Task tree</h3>
+                  <button
+                    className="rounded-2xl border border-[var(--border)] px-3 py-2 text-sm font-medium text-[var(--muted)] hover:bg-[var(--surface-soft)]"
+                    onClick={() => taskInputRef.current?.focus()}
+                  >
+                    + Task
+                  </button>
                 </div>
                 <form
-                  className="mt-4 flex gap-2"
+                  className="mt-4 flex gap-3"
                   onSubmit={async (event) => {
                     event.preventDefault();
                     await createTaskPath(taskTitle);
@@ -371,99 +447,319 @@ export default function Home() {
                   }}
                 >
                   <input
+                    ref={taskInputRef}
                     value={taskTitle}
                     onChange={(event) => setTaskTitle(event.target.value)}
-                    className="w-full rounded-2xl border border-[var(--border)] bg-[var(--surface-soft)] px-4 py-3 text-sm outline-none placeholder:text-[var(--placeholder)]"
+                    className="min-w-0 flex-1 rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm outline-none placeholder:text-[var(--placeholder)]"
                     placeholder="Add a task or path, e.g. Project / Subtask"
                   />
-                  <button className="rounded-2xl bg-[var(--primary)] px-4 py-3 text-sm font-medium text-[var(--primary-foreground)]">Add</button>
+                  <button className="rounded-2xl bg-[var(--primary)] px-5 py-3 text-sm font-semibold text-[var(--primary-foreground)] shadow-sm">
+                    Add
+                  </button>
                 </form>
-                <div className="mt-5 space-y-3 text-sm">
-                  {tasks.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface-soft)] px-4 py-6 text-[var(--muted)]">
+                <div className="mt-5 overflow-visible rounded-2xl border border-[var(--border)]">
+                  {visibleTaskRows.length === 0 ? (
+                    <div className="bg-[var(--surface-soft)] px-4 py-6 text-sm text-[var(--muted)]">
                       No tasks yet. Create your first focus tree node.
                     </div>
                   ) : (
-                    visibleTasks.map(({ task, depth }) => (
-                      <div key={task.id} className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-soft)] px-4 py-3" style={{ marginLeft: depth * 16 }}>
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <span className="font-medium">{depth > 0 ? "↳ " : ""}{task.title}</span>
-                            <p className="mt-1 text-xs text-[var(--muted)]">
-                              {taskStatsById.get(task.id)?.completedCount ?? 0} done - {formatDuration(taskStatsById.get(task.id)?.totalFocusSeconds ?? 0)}
-                            </p>
-                          </div>
-                          <div className="flex flex-wrap items-center justify-end gap-2">
-                            <button
-                              aria-label={`Focus ${task.title}`}
-                              className="rounded-full border border-[var(--border)] px-3 py-1 text-xs font-medium text-[var(--muted)] disabled:opacity-40"
-                              disabled={Boolean(activeSession)}
-                              onClick={() => void startFocus(task.id, focusIntention, customPlannedSeconds).then(() => setFocusIntention(""))}
-                            >
-                              Focus
-                            </button>
-                            <button
-                              className="rounded-full border border-[var(--border)] px-3 py-1 text-xs font-medium text-[var(--muted)]"
-                              onClick={() => void updateTask(task.id, { status: task.status === "done" ? "todo" : "done" })}
-                            >
-                              {task.status === "done" ? "Reopen" : "Done"}
-                            </button>
-                            <button
-                              className="rounded-full border border-[var(--border)] px-3 py-1 text-xs font-medium text-[var(--muted)]"
-                              onClick={() => beginEditTask(task)}
-                            >
-                              Edit
-                            </button>
-                            <button
-                              className="rounded-full border border-[var(--border)] px-3 py-1 text-xs font-medium text-[var(--muted)]"
-                              onClick={() => void updateTask(task.id, { status: "archived" })}
-                            >
-                              Archive
-                            </button>
-                          </div>
-                        </div>
-                        {editingTaskId === task.id ? (
-                          <form
-                            className="mt-3 grid gap-2 rounded-2xl bg-[var(--surface)] p-3 md:grid-cols-[1fr_180px_auto_auto]"
-                            onSubmit={(event) => {
-                              event.preventDefault();
-                              void saveTaskEdit();
-                            }}
+                    <div>
+                      {visibleTaskRows.map(({ task, depth, hasChildren }, rowIndex) => {
+                        const isSelected = effectiveTaskId === task.id;
+                        const isDone = task.status === "done";
+                        const isExpanded = hasChildren ? expandedTaskIds.has(task.id) : false;
+                        const stats = taskStatsById.get(task.id);
+
+                        return (
+                          <div
+                            key={task.id}
+                            aria-label={`Task row ${task.title}`}
+                            className={`relative px-3 py-2.5 transition-colors hover:bg-[var(--surface-soft)] ${
+                              isSelected ? "bg-[var(--surface-soft)]" : "bg-[var(--surface)]"
+                            } ${rowIndex === 0 ? "rounded-t-2xl" : "border-t border-[var(--border-subtle)]"} ${
+                              rowIndex === visibleTaskRows.length - 1 ? "rounded-b-2xl" : ""
+                            }`}
+                            style={{ paddingLeft: depth * 22 + 14 }}
                           >
-                            <input
-                              aria-label={`Edit title for ${task.title}`}
-                              value={editingTaskTitle}
-                              onChange={(event) => setEditingTaskTitle(event.target.value)}
-                              className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 outline-none"
-                            />
-                            <select
-                              aria-label={`Move ${task.title}`}
-                              value={editingParentId}
-                              onChange={(event) => setEditingParentId(event.target.value)}
-                              className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 outline-none"
-                            >
-                              <option value="">Root</option>
-                              {editableParentOptions.map(({ task: optionTask, depth: optionDepth }) => (
-                                <option key={optionTask.id} value={optionTask.id}>
-                                  {`${"— ".repeat(optionDepth)}${optionTask.title}`}
-                                </option>
-                              ))}
-                            </select>
-                            <button className="rounded-xl bg-[var(--primary)] px-3 py-2 text-xs font-medium text-[var(--primary-foreground)]">Save task</button>
-                            <button
-                              type="button"
-                              className="rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-medium"
-                              onClick={() => setEditingTaskId(null)}
-                            >
-                              Cancel
-                            </button>
-                          </form>
-                        ) : null}
-                      </div>
-                    ))
+                            {depth > 0 ? (
+                              <span
+                                aria-hidden="true"
+                                className="absolute bottom-0 left-5 top-0 border-l border-dashed border-[var(--border-subtle)]"
+                              />
+                            ) : null}
+                            <div className="flex items-center gap-3">
+                              <div className="flex min-w-0 flex-1 items-center gap-2">
+                                <div className="relative z-[1] w-5 shrink-0">
+                                  {hasChildren ? (
+                                    <button
+                                      aria-label={isExpanded ? `Collapse ${task.title}` : `Expand ${task.title}`}
+                                      className="rounded-md px-1 py-0.5 text-xs text-[var(--muted)] hover:bg-[var(--surface)]"
+                                      onClick={() => toggleTaskExpansion(task.id)}
+                                    >
+                                      {isExpanded ? "▾" : "▸"}
+                                    </button>
+                                  ) : isDone ? (
+                                    <span aria-hidden="true" className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--muted)] text-[10px] text-[var(--surface)]">
+                                      ✓
+                                    </span>
+                                  ) : (
+                                    <span aria-hidden="true" className="block h-5 w-5" />
+                                  )}
+                                </div>
+                                <button
+                                  aria-label={`Select ${task.title}`}
+                                  className={`min-w-0 shrink text-left text-sm font-medium tracking-tight ${
+                                    isDone ? "text-[var(--muted)] line-through" : "text-[var(--foreground)]"
+                                  }`}
+                                  onClick={() => setSelectedTaskId(task.id)}
+                                >
+                                  <span className="truncate">{task.title}</span>
+                                </button>
+                                {isDone ? (
+                                  <span className="rounded-full border border-[var(--border)] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.16em] text-[var(--muted)]">
+                                    Done
+                                  </span>
+                                ) : null}
+                                <span className="whitespace-nowrap text-xs text-[var(--muted)]">
+                                  {stats?.completedCount ?? 0} 🍅 · {formatDuration(stats?.totalFocusSeconds ?? 0)}
+                                </span>
+                              </div>
+                              <div className="ml-auto flex shrink-0 items-center gap-2">
+                                {!isDone ? (
+                                  <button
+                                    aria-label={`Focus ${task.title}`}
+                                    className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--muted)] hover:bg-[var(--surface-soft)] disabled:opacity-40"
+                                    disabled={Boolean(activeSession)}
+                                    onClick={() => void startFocus(task.id, focusIntention, customPlannedSeconds).then(() => setFocusIntention(""))}
+                                  >
+                                    Focus
+                                  </button>
+                                ) : null}
+                                {!isDone ? (
+                                  <button
+                                    aria-label={`Add subtask under ${task.title}`}
+                                    className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--muted)] hover:bg-[var(--surface-soft)]"
+                                    onClick={() => {
+                                      setExpandedTaskOverrides((current) => ({
+                                        ...current,
+                                        [task.id]: true,
+                                      }));
+                                      setAddingSubtaskParentId(task.id);
+                                      setSubtaskTitle("");
+                                    }}
+                                  >
+                                    + Subtask
+                                  </button>
+                                ) : null}
+                                <details className="task-row-menu relative z-20">
+                                  <summary
+                                    aria-label={`More actions for ${task.title}`}
+                                    className="list-none rounded-full border border-[var(--border)] px-2.5 py-1.5 text-xs font-medium text-[var(--muted)] hover:bg-[var(--surface-soft)] [&::-webkit-details-marker]:hidden"
+                                  >
+                                    ...
+                                  </summary>
+                                  <div className="absolute right-0 z-50 mt-2 min-w-36 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-1 shadow-lg">
+                                    <button
+                                      type="button"
+                                      className="block w-full rounded-lg px-3 py-2 text-left text-xs text-[var(--muted)] hover:bg-[var(--surface-soft)]"
+                                      onClick={(event) => {
+                                        (event.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute("open");
+                                        beginEditTask(task);
+                                      }}
+                                    >
+                                      Edit
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="block w-full rounded-lg px-3 py-2 text-left text-xs text-[var(--muted)] hover:bg-[var(--surface-soft)]"
+                                      onClick={(event) => {
+                                        (event.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute("open");
+                                        void updateTask(task.id, { status: isDone ? "todo" : "done" });
+                                      }}
+                                    >
+                                      {isDone ? "Reopen" : "Done"}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="block w-full rounded-lg px-3 py-2 text-left text-xs text-[var(--muted)] hover:bg-[var(--surface-soft)]"
+                                      onClick={(event) => {
+                                        (event.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute("open");
+                                        void archiveTask(task.id);
+                                      }}
+                                    >
+                                      Archive
+                                    </button>
+                                  </div>
+                                </details>
+                              </div>
+                            </div>
+                            {effectiveAddingSubtaskParentId === task.id ? (
+                              <form
+                                className="mt-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3"
+                                onSubmit={(event) => {
+                                  event.preventDefault();
+                                  void saveInlineSubtask();
+                                }}
+                              >
+                                <div className="flex gap-2">
+                                  <input
+                                    aria-label={`Subtask title under ${task.title}`}
+                                    value={subtaskTitle}
+                                    onChange={(event) => setSubtaskTitle(event.target.value)}
+                                    className="min-w-0 flex-1 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 outline-none"
+                                    placeholder={`Add a subtask under ${task.title}`}
+                                  />
+                                  <button className="rounded-xl bg-[var(--primary)] px-3 py-2 text-xs font-medium whitespace-nowrap text-[var(--primary-foreground)]">
+                                    Add subtask
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-medium whitespace-nowrap"
+                                    onClick={() => {
+                                      setAddingSubtaskParentId(null);
+                                      setSubtaskTitle("");
+                                    }}
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </form>
+                            ) : null}
+                            {editingTaskId === task.id ? (
+                              <form
+                                className="mt-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3"
+                                onSubmit={(event) => {
+                                  event.preventDefault();
+                                  void saveTaskEdit();
+                                }}
+                              >
+                                <div className="grid gap-2 xl:grid-cols-[minmax(0,1fr)_180px] xl:items-center">
+                                  <input
+                                    aria-label={`Edit title for ${task.title}`}
+                                    value={editingTaskTitle}
+                                    onChange={(event) => setEditingTaskTitle(event.target.value)}
+                                    className="min-w-0 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 outline-none"
+                                  />
+                                  <select
+                                    aria-label={`Move ${task.title}`}
+                                    value={editingParentId}
+                                    onChange={(event) => setEditingParentId(event.target.value)}
+                                    className="min-w-0 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 outline-none"
+                                  >
+                                    <option value="">Root</option>
+                                    {editableParentOptions.map(({ task: optionTask, depth: optionDepth }) => (
+                                      <option key={optionTask.id} value={optionTask.id}>
+                                        {`${"— ".repeat(optionDepth)}${optionTask.title}`}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div className="mt-2 flex flex-wrap justify-end gap-2">
+                                  <button className="rounded-xl bg-[var(--primary)] px-3 py-2 text-xs font-medium whitespace-nowrap text-[var(--primary-foreground)]">
+                                    Save task
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-medium whitespace-nowrap"
+                                    onClick={() => setEditingTaskId(null)}
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </form>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
-              </div>
+                <div className="mt-4 flex flex-wrap gap-4 text-xs text-[var(--muted)]">
+                  <span>🍅 = Completed Pomodoros</span>
+                  <span>•</span>
+                  <span>Click chevron to expand/collapse</span>
+                  <span>•</span>
+                  <span>Click task to select</span>
+                </div>
+              </section>
+
+              <section className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_1px_0_var(--shadow-line)]">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <span aria-hidden="true" className="text-base">📦</span>
+                    <h3 className="text-lg font-semibold tracking-tight">Archived Tasks</h3>
+                    <span className="rounded-full bg-[var(--surface-soft)] px-2.5 py-1 text-xs font-medium text-[var(--muted)]">
+                      {archivedBranchRoots.length}
+                    </span>
+                  </div>
+                  <button
+                    aria-label={showArchivedTasks ? "Collapse archived tasks" : "Expand archived tasks"}
+                    className="rounded-full px-2 py-1 text-base leading-none text-[var(--muted)] hover:bg-[var(--surface-soft)]"
+                    onClick={() => setShowArchivedTasks((current) => !current)}
+                  >
+                    {showArchivedTasks ? "⌄" : "⌃"}
+                  </button>
+                </div>
+                {showArchivedTasks ? (
+                  archivedBranchRoots.length === 0 ? (
+                    <p className="mt-4 rounded-2xl bg-[var(--surface-soft)] px-4 py-3 text-sm text-[var(--muted)]">No archived tasks.</p>
+                  ) : (
+                    <div className="mt-4 overflow-visible rounded-2xl border border-[var(--border)]">
+                      {archivedBranchRoots.map((task, index) => {
+                        const stats = taskStatsById.get(task.id);
+                        return (
+                          <article
+                            key={task.id}
+                            className={`bg-[var(--surface)] px-3 py-2.5 ${
+                              index === 0 ? "rounded-t-2xl" : ""
+                            } ${index < archivedBranchRoots.length - 1 ? "border-b border-[var(--border)]" : "rounded-b-2xl"}`}
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="flex min-w-0 items-center gap-3">
+                                <span aria-hidden="true" className="text-base text-[var(--muted)]">📦</span>
+                                <div className="min-w-0">
+                                  <p className="truncate text-sm font-medium">{task.title}</p>
+                                  <p className="mt-1 text-xs text-[var(--muted)]">
+                                    {stats?.completedCount ?? 0} 🍅 · {formatDuration(stats?.totalFocusSeconds ?? 0)}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex shrink-0 items-center gap-2">
+                                <button
+                                  className="rounded-full border border-[var(--border)] px-3 py-1.5 text-xs font-medium text-[var(--muted)] hover:bg-[var(--surface-soft)]"
+                                  onClick={() => void restoreTaskBranch(task.id)}
+                                >
+                                  Restore
+                                </button>
+                                <details className="task-row-menu relative z-20">
+                                  <summary
+                                    aria-label={`More actions for archived ${task.title}`}
+                                    className="list-none rounded-full border border-[var(--border)] px-2.5 py-1.5 text-xs font-medium text-[var(--muted)] hover:bg-[var(--surface-soft)] [&::-webkit-details-marker]:hidden"
+                                  >
+                                    ...
+                                  </summary>
+                                  <div className="absolute right-0 z-50 mt-2 min-w-36 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-1 shadow-lg">
+                                    <button
+                                      type="button"
+                                      className="block w-full rounded-lg px-3 py-2 text-left text-xs text-[var(--muted)] hover:bg-[var(--surface-soft)]"
+                                      onClick={(event) => {
+                                        (event.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute("open");
+                                        beginEditTask(task);
+                                      }}
+                                    >
+                                      Edit
+                                    </button>
+                                  </div>
+                                </details>
+                              </div>
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  )
+                ) : null}
+              </section>
 
               <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6">
                 <h3 className="text-lg font-semibold">Today</h3>
@@ -514,7 +810,7 @@ export default function Home() {
                               className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 outline-none"
                             >
                               <option value="">Unassigned / intention</option>
-                              {visibleTasks.map(({ task, depth }) => (
+                              {activeTaskRows.map(({ task, depth }) => (
                                 <option key={task.id} value={task.id}>
                                   {`${"— ".repeat(depth)}${task.title}`}
                                 </option>
@@ -545,26 +841,31 @@ export default function Home() {
                   )}
                 </div>
               </div>
-            </section>
+            </div>
           </div>
 
-          <aside className="grid gap-6">
+          <aside className="grid content-start gap-6">
             <section className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6">
-              <h3 className="text-lg font-semibold">Session notes</h3>
+              <h3 className="text-lg font-semibold">Interruptions</h3>
               <textarea
                 className="mt-4 min-h-40 w-full resize-none rounded-2xl border border-[var(--border)] bg-[var(--surface-soft)] p-4 text-sm outline-none placeholder:text-[var(--placeholder)]"
                 placeholder="Capture an intention, a summary, or the next follow-up task..."
                 value={interruptionText}
                 onChange={(event) => setInterruptionText(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    void saveInterruptionNote();
+                  }
+                }}
               />
               <div className="mt-4 flex gap-3">
                 <button
                   className="rounded-full border border-[var(--border)] px-4 py-2 text-sm font-medium"
-                  onClick={() => void createInterruption(interruptionText).then(() => setInterruptionText(""))}
+                  onClick={() => void saveInterruptionNote()}
                 >
-                  Save note
+                  Add interruption
                 </button>
-                <button className="rounded-full border border-[var(--border)] px-4 py-2 text-sm font-medium">Add interruption</button>
               </div>
               <div className="mt-5 space-y-3">
                 {openInterruptions.length === 0 ? (

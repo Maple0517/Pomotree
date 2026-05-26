@@ -20,6 +20,7 @@ import {
   moveTask,
   pauseSession,
   requestFinish,
+  restoreTaskBranch,
   resumeSession,
   saveFinish,
   startFocus,
@@ -46,6 +47,7 @@ interface AppState {
   updateTask: (taskId: string, input: { title?: string; description?: string | null; status?: Task["status"] }) => Promise<void>;
   moveTask: (taskId: string, parentId: string | null) => Promise<void>;
   archiveTask: (taskId: string) => Promise<void>;
+  restoreTaskBranch: (taskId: string) => Promise<void>;
   changeSessionAttribution: (sessionId: string, taskId: string | null) => Promise<void>;
   startFocus: (taskId?: string | null, intention?: string | null, plannedSeconds?: number) => Promise<void>;
   pauseSession: () => Promise<void>;
@@ -137,6 +139,15 @@ export const useAppStore = create<AppState>((set, get) => ({
       await refresh(set);
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to archive task" });
+      throw error;
+    }
+  },
+  restoreTaskBranch: async (taskId) => {
+    try {
+      await restoreTaskBranch(taskId);
+      await refresh(set);
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : "Failed to restore archived branch" });
       throw error;
     }
   },

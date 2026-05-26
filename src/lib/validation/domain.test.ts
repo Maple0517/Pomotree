@@ -75,6 +75,11 @@ describe("domain validators", () => {
     expect(() => validateTaskRecord(makeTask({ title: "  " }))).toThrow("Task title is required");
     expect(() => validateTaskRecord(makeTask({ status: "done" }))).toThrow("Done tasks require completedAt");
     expect(() => validateTaskRecord(makeTask({ status: "archived", archivedAt: now }))).not.toThrow();
+    expect(() => validateTaskRecord(makeTask({ status: "archived", archivedAt: now, previousStatus: "archived" as never }))).toThrow("previousStatus");
+    expect(() => validateTaskRecord(makeTask({ status: "todo", previousStatus: "todo" }))).toThrow("previousStatus");
+    expect(() =>
+      validateTaskRecord(makeTask({ status: "archived", archivedAt: now, previousStatus: "done", completedAt: now })),
+    ).not.toThrow();
   });
 
   it("enforces focus session duration and terminal fields", () => {

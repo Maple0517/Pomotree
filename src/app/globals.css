@@ -81,6 +81,77 @@ textarea {
   font: inherit;
 }
 
+button,
+select,
+summary {
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease,
+    filter 150ms ease,
+    transform 150ms ease;
+}
+
+button:not(:disabled),
+select,
+summary {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+button:not(:disabled):not([class*="bg-[var(--primary)]"]):hover,
+select:hover,
+summary:hover {
+  border-color: var(--muted);
+  background-color: var(--surface-soft);
+}
+
+button:not(:disabled)[class*="bg-[var(--primary)]"]:hover {
+  filter: brightness(0.92);
+}
+
+button:not(:disabled):active,
+summary:active {
+  transform: translateY(1px);
+}
+
+button:focus-visible,
+select:focus-visible,
+summary:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--foreground) 32%, transparent);
+  outline-offset: 2px;
+}
+
+label:has(input:not(:disabled)) {
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease,
+    transform 150ms ease;
+}
+
+label:has(input:not(:disabled)):hover {
+  border-color: var(--muted);
+  background-color: var(--surface-soft);
+}
+
+label:has(input:not(:disabled)):active {
+  transform: translateY(1px);
+}
+
+label:has(input:not(:disabled)):focus-within {
+  outline: 2px solid color-mix(in srgb, var(--foreground) 32%, transparent);
+  outline-offset: 2px;
+}
+
+.task-row-menu[open] {
+  z-index: 80;
+}
+
 input,
 select,
 textarea {

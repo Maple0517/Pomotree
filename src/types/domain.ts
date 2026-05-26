@@ -2,6 +2,7 @@ export type EntityId = string;
 export type ISODateTimeString = string;
 
 export type TaskStatus = "todo" | "active" | "done" | "archived";
+export type RestorableTaskStatus = "todo" | "active" | "done";
 
 export interface Task {
   id: EntityId;
@@ -9,6 +10,7 @@ export interface Task {
   title: string;
   description?: string;
   status: TaskStatus;
+  previousStatus?: RestorableTaskStatus | null;
   sortOrder: number;
   createdAt: ISODateTimeString;
   updatedAt: ISODateTimeString;
