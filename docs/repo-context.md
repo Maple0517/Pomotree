@@ -22,7 +22,7 @@
 | Phase 4: Interruption service | Done | Create/dismiss/done/convert flows are service-backed and tested; capture does not mutate timer state. |
 | Phase 5: Stats/selectors | Done | Local-day helper, Today stats, focus time, task aggregate count/time, subtree aggregation, and boundary tests exist. |
 | Phase 6: State/store layer | Done | Zustand store wraps service calls and refreshes snapshots; UI does not write Dexie directly. |
-| Phase 7: Dashboard UI | Done for MVP | Dashboard shell, task tree, start/running/pause/finishing panels, attribution selectors, interruptions, Today panel, recent-session attribution correction, labels, and keyboard-native controls exist. |
+| Phase 7: Dashboard UI | Done for MVP | Dashboard shell, compact collapsible task tree, direct inline subtask creation, Done/Reopen/Archive actions, archived-task panel, start/running/pause/finishing panels, attribution selectors, interruptions, Today panel, recent-session attribution correction, labels, and keyboard-native controls exist. |
 | Phase 8: Recovery and E2E | Done | Active recovery, expired running restore, corrupt fail-safe, storage-unavailable warning, and Playwright coverage exist. |
 | Phase 9: Settings/export | Done | Default duration, theme, browser notifications, JSON export/import restore, and tests exist. |
 
@@ -30,6 +30,11 @@
 
 - Local-only IndexedDB persistence with Dexie schema version 1.
 - Create root tasks, subtasks, and slash-delimited task paths.
+- Render compact collapsible task rows with indentation, chevrons, subtree aggregate stats, selection that does not toggle expansion, and keyboard-native buttons/actions.
+- Create root tasks, slash-delimited paths, and direct inline subtasks with `parentId` set to the current active task row.
+- Top-level task branches default expanded; deeper branches default collapsed; selected-task and active-session paths auto-expand.
+- Done tasks remain visible in the active tree with completed styling, can be reopened, and can be archived; Done does not alter history or focus-session records.
+- Archived task branches are hidden from the active task tree and shown in a separate Archived Tasks panel; archive/restore preserve history and focus-session records.
 - Render/edit/move/archive task tree with cycle protection and history-preserving archive semantics.
 - Start focus sessions from a task or from an unassigned intention.
 - Support default focus durations and custom per-session durations.
@@ -45,6 +50,7 @@
 - Active-session recovery for refresh/reopen, including duplicate/corrupt fail-safe behavior.
 - User-visible storage-unavailable warnings.
 - JSON export/import with schema version 1 and referential validation.
+- App-wide button/select/menu hover states are consistent with task-tree row interactions; compact action menus close on outside click and render above neighboring rows.
 
 ## Test coverage snapshot
 
@@ -52,10 +58,12 @@ Current verified gates:
 
 - `npm run lint`
 - `npm run build`
-- `npm run test` (`28` tests)
-- `npm run e2e` (`12` tests)
+- `npm run test` (`41` tests)
+- `npm run e2e -- --reporter=line` (`14` tests)
 
 Coverage includes the design-doc test matrix items T001-T030 through unit, integration-style service tests, and Playwright E2E flows.
+
+Additional coverage now includes task-tree selectors, direct subtask lifecycle flows, Done/Reopen/Archive semantics, collapsed-tree auto-expansion behavior, archived-branch restore, and legacy archived finishing-session handling.
 
 ## Deferred / not in MVP
 
