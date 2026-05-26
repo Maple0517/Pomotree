@@ -9,9 +9,12 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "echo \"Tauri production packaging is not configured for this v0 spike. Choose static export or bundled local-server strategy first.\" && exit 1"
   },
   "dependencies": {
+    "@tauri-apps/api": "^2.11.0",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "dexie": "^4.2.1",
@@ -24,6 +27,7 @@
   "devDependencies": {
     "@playwright/test": "^1.60.0",
     "@tailwindcss/postcss": "^4",
+    "@tauri-apps/cli": "^2.11.2",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

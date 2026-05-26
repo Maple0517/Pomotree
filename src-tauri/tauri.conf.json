@@ -1,0 +1,42 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "Pomotree",
+  "version": "0.1.0",
+  "identifier": "com.pomotree.menubar",
+  "build": {
+    "devUrl": "http://localhost:3000/menubar",
+    "frontendDist": "../.next",
+    "beforeDevCommand": "npm run dev -- --port 3000"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "menubar",
+        "title": "Pomotree",
+        "url": "/menubar",
+        "width": 380,
+        "height": 560,
+        "minWidth": 360,
+        "maxWidth": 420,
+        "minHeight": 420,
+        "maxHeight": 600,
+        "resizable": false,
+        "maximizable": false,
+        "fullscreen": false,
+        "center": true,
+        "hiddenTitle": true,
+        "titleBarStyle": "Overlay"
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "app",
+    "icon": [
+      "icons/tray-icon.png"
+    ]
+  }
+}
