@@ -16,12 +16,11 @@ type ActionState = {
 };
 
 const MENUBAR_WINDOW_WIDTH = 380;
-const MENUBAR_WINDOW_VERTICAL_PADDING = 24;
 const MENUBAR_HEIGHT_LIMITS: Record<MenubarMode, { min: number; max: number }> = {
-  idle: { min: 360, max: 430 },
-  running: { min: 400, max: 470 },
-  paused: { min: 430, max: 500 },
-  finishing: { min: 500, max: 580 },
+  idle: { min: 320, max: 430 },
+  running: { min: 340, max: 470 },
+  paused: { min: 380, max: 500 },
+  finishing: { min: 440, max: 580 },
 };
 
 function menubarMode(session: FocusSession | undefined): MenubarMode {
@@ -34,7 +33,7 @@ function menubarMode(session: FocusSession | undefined): MenubarMode {
 
 function targetWindowHeight(mode: MenubarMode, measuredPanelHeight: number) {
   const limits = MENUBAR_HEIGHT_LIMITS[mode];
-  const contentHeight = Math.ceil(measuredPanelHeight + MENUBAR_WINDOW_VERTICAL_PADDING);
+  const contentHeight = Math.ceil(measuredPanelHeight);
   return Math.min(limits.max, Math.max(limits.min, contentHeight));
 }
 
@@ -363,6 +362,16 @@ export function MenubarApp() {
     root.dataset.theme = settings.theme === "system" ? (prefersDark ? "dark" : "light") : settings.theme;
   }, [settings.theme]);
 
+  useEffect(() => {
+    document.documentElement.classList.add("menubar-popover-root");
+    document.body.classList.add("menubar-popover-body");
+
+    return () => {
+      document.documentElement.classList.remove("menubar-popover-root");
+      document.body.classList.remove("menubar-popover-body");
+    };
+  }, []);
+
   const activeSession = sessions.find((session) => ["running", "paused", "finishing"].includes(session.status));
   const mode = menubarMode(activeSession);
   const remainingSeconds = activeSession ? computeRemainingSeconds(activeSession, pauses, now) : settings.defaultFocusSeconds;
@@ -378,7 +387,7 @@ export function MenubarApp() {
     const resizeWindow = () => {
       window.cancelAnimationFrame(animationFrame);
       animationFrame = window.requestAnimationFrame(() => {
-        const nextHeight = targetWindowHeight(mode, panel.getBoundingClientRect().height);
+        const nextHeight = targetWindowHeight(mode, panel.scrollHeight);
         if (Math.abs(nextHeight - lastHeight) < 1) return;
 
         lastHeight = nextHeight;
@@ -419,8 +428,8 @@ export function MenubarApp() {
   const busy = action.busy || loading;
 
   return (
-    <main className="min-h-screen bg-[var(--background)] px-3 py-3 text-[var(--foreground)]">
-      <section ref={panelRef} className="mx-auto grid max-h-[calc(100vh-24px)] w-full max-w-[420px] gap-4 overflow-y-auto rounded-[20px] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[0_18px_45px_rgba(0,0,0,0.14)] sm:max-w-[380px]">
+    <main className="w-[380px] bg-[var(--surface)] text-[var(--foreground)]">
+      <section ref={panelRef} className="grid max-h-screen w-full gap-4 overflow-y-auto rounded-[20px] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[0_18px_45px_rgba(0,0,0,0.14)]">
         <header className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2">
             <span className="text-lg" aria-hidden="true">{header.icon}</span>

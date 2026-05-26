@@ -74,6 +74,13 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+html.menubar-popover-root,
+body.menubar-popover-body {
+  min-height: 0;
+  background: var(--surface);
+  overflow: hidden;
+}
+
 button,
 input,
 select,
