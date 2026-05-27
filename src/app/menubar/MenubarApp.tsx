@@ -109,7 +109,7 @@ function SecondaryButton({ children, disabled, form, name, onClick, type = "butt
 function OpenDashboardButton() {
   const openDashboard = () => {
     if (isTauriRuntime()) {
-      invokeTauriCommand("open_dashboard_in_browser");
+      invokeTauriCommand("open_dashboard");
       return;
     }
 
