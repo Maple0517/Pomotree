@@ -194,6 +194,23 @@ fn open_dashboard_window(app: &AppHandle) {
 }
 
 #[tauri::command]
+fn play_focus_complete_sound() -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("afplay")
+            .arg("/System/Library/Sounds/Glass.aiff")
+            .spawn()
+            .map(|_| ())
+            .map_err(|error| error.to_string())
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        Ok(())
+    }
+}
+
+#[tauri::command]
 fn set_menubar_status(app: AppHandle, title: String) -> Result<(), String> {
     let title = title.trim();
     let safe_title = if title.is_empty() {
@@ -210,7 +227,10 @@ fn set_menubar_status(app: AppHandle, title: String) -> Result<(), String> {
 
 pub fn run() {
     let app = tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![set_menubar_status])
+        .invoke_handler(tauri::generate_handler![
+            play_focus_complete_sound,
+            set_menubar_status
+        ])
         .setup(|app| {
             let show_item =
                 MenuItem::with_id(app, SHOW_MENU_ID, "Show Pomotree", true, None::<&str>)?;

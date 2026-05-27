@@ -65,6 +65,14 @@ function isTauriRuntime() {
   return "__TAURI_INTERNALS__" in window;
 }
 
+function invokeTauriCommand(command: string, args?: Record<string, unknown>) {
+  if (!isTauriRuntime()) return;
+
+  void import("@tauri-apps/api/core")
+    .then(({ invoke }) => invoke(command, args))
+    .catch(() => {});
+}
+
 function PrimaryButton({ children, disabled, onClick, type = "button" }: { children: React.ReactNode; disabled?: boolean; onClick?: () => void; type?: "button" | "submit" }) {
   return (
     <button
@@ -359,6 +367,7 @@ export function MenubarApp() {
   const [action, setAction] = useState<ActionState>({ busy: false, message: null });
   const panelRef = useRef<HTMLElement | null>(null);
   const lastTrayTitleRef = useRef<string | null>(null);
+  const lastCompletionSoundSessionRef = useRef<string | null>(null);
 
   useEffect(() => {
     void hydrate();
@@ -427,13 +436,16 @@ export function MenubarApp() {
     if (!isTauriRuntime() || lastTrayTitleRef.current === trayTitle) return;
 
     lastTrayTitleRef.current = trayTitle;
-    void import("@tauri-apps/api/core")
-      .then(({ invoke }) => invoke("set_menubar_status", { title: trayTitle }))
-      .catch(() => {});
+    invokeTauriCommand("set_menubar_status", { title: trayTitle });
   }, [trayTitle]);
 
   useEffect(() => {
     if (activeSession?.status === "running" && remainingSeconds <= 0) {
+      if (lastCompletionSoundSessionRef.current !== activeSession.id) {
+        lastCompletionSoundSessionRef.current = activeSession.id;
+        invokeTauriCommand("play_focus_complete_sound");
+      }
+
       void expireRunningSession(activeSession.id);
     }
   }, [activeSession?.id, activeSession?.status, expireRunningSession, remainingSeconds]);
