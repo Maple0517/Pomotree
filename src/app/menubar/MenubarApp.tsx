@@ -4,7 +4,7 @@ import Link from "next/link";
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { getTaskPathIds } from "@/lib/services/taskSelectors";
 import { useAppStore } from "@/lib/store/useAppStore";
-import { computeElapsedSeconds, computeRemainingSeconds, formatClock } from "@/lib/utils/timer";
+import { computeRemainingSeconds, formatClock } from "@/lib/utils/timer";
 import type { FocusSession, Task } from "@/types/domain";
 
 type DurationPreset = 25 | 50 | "custom";
@@ -22,8 +22,7 @@ const MENUBAR_WINDOW = {
 } as const;
 
 const SHELL_LAYOUT = {
-  headerHeight: 52,
-  capsuleHeight: 150,
+  headerHeight: 44,
   actionBarHeight: 116,
 } as const;
 
@@ -375,64 +374,6 @@ function IdleStartForm({
   );
 }
 
-function FocusCapsule({
-  mode,
-  session,
-  tasks,
-  remainingSeconds,
-  defaultFocusSeconds,
-  elapsedSeconds,
-}: {
-  mode: MenubarMode;
-  session?: FocusSession;
-  tasks: Task[];
-  remainingSeconds: number;
-  defaultFocusSeconds: number;
-  elapsedSeconds: number;
-}) {
-  const path = session ? (session.taskPathSnapshot ?? taskPath(tasks, session.taskId)) : null;
-  const intention = session?.intention?.trim();
-  const plannedSeconds = session?.plannedSeconds ?? defaultFocusSeconds;
-
-  if (mode === "idle") {
-    return (
-      <section className="grid h-full content-center gap-3 rounded-[24px] border border-[var(--border-subtle)] bg-[var(--surface-soft)] px-5">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">Ready</p>
-          <p className="mt-2 text-4xl font-semibold tracking-[-0.04em] text-[var(--foreground)]">{formatClock(defaultFocusSeconds)}</p>
-        </div>
-        <p className="line-clamp-2 text-sm leading-5 text-[var(--muted-strong)]">Pick a task or write an intention to start a focus capsule.</p>
-      </section>
-    );
-  }
-
-  if (mode === "finishing") {
-    return (
-      <section className="grid h-full content-center gap-3 rounded-[24px] border border-[var(--info-border)] bg-[var(--info-bg)] px-5 text-[var(--info-text)]">
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em]">Completed</p>
-          <span className="rounded-full bg-[color-mix(in_srgb,var(--info-text)_12%,transparent)] px-2.5 py-1 text-xs font-semibold">Ready to save</span>
-        </div>
-        <p className="text-4xl font-semibold tracking-[-0.04em]">{formatClock(elapsedSeconds)}</p>
-        <p className="line-clamp-2 text-sm leading-5">Planned {formatClock(plannedSeconds)} · {path || intention || "Unassigned focus"}</p>
-      </section>
-    );
-  }
-
-  return (
-    <section className="grid h-full content-center gap-3 rounded-[24px] border border-[var(--border)] bg-[var(--surface-soft)] px-5">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">{mode === "paused" ? "Paused" : "Focusing"}</p>
-        <span className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-semibold text-[var(--muted-strong)]">
-          {mode === "paused" ? "Hold" : "Live"}
-        </span>
-      </div>
-      <p className="text-5xl font-semibold tracking-[-0.06em] text-[var(--foreground)]">{formatClock(remainingSeconds)}</p>
-      <p className="line-clamp-2 text-sm leading-5 text-[var(--muted-strong)]">{path || intention || "No goal written"}</p>
-    </section>
-  );
-}
-
 function ActionBar({
   mode,
   busy,
@@ -556,7 +497,6 @@ export function MenubarApp() {
   const activeSession = sessions.find((session) => ["running", "paused", "finishing"].includes(session.status));
   const mode = menubarMode(activeSession);
   const remainingSeconds = activeSession ? computeRemainingSeconds(activeSession, pauses, now) : settings.defaultFocusSeconds;
-  const elapsedSeconds = activeSession ? computeElapsedSeconds(activeSession, pauses, now) : 0;
   const header = statusHeader(activeSession, remainingSeconds);
   const trayTitle = menubarStatusTitle(activeSession, remainingSeconds);
 
@@ -595,13 +535,13 @@ export function MenubarApp() {
       className="bg-[var(--surface)] text-[var(--foreground)]"
       style={{ width: MENUBAR_WINDOW.width, height: MENUBAR_WINDOW.height }}
     >
-      <section className="grid h-full w-full grid-rows-[auto_auto_minmax(0,1fr)_auto] overflow-hidden rounded-[20px] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[0_18px_45px_rgba(0,0,0,0.14)]">
+      <section className="grid h-full w-full grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-[20px] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[0_18px_45px_rgba(0,0,0,0.14)]">
         <header
           className="flex shrink-0 items-center justify-between gap-3"
           style={{ height: SHELL_LAYOUT.headerHeight }}
         >
           <div className="flex min-w-0 items-center gap-2">
-            <span className="text-lg" aria-hidden="true">{header.icon}</span>
+            <span className="text-base leading-none" aria-hidden="true">{header.icon}</span>
             <p className="min-w-0 truncate text-[15px] font-semibold tracking-tight">{header.text}</p>
           </div>
           <button
@@ -614,16 +554,6 @@ export function MenubarApp() {
           </button>
         </header>
 
-        <div className="shrink-0" style={{ height: SHELL_LAYOUT.capsuleHeight }}>
-          <FocusCapsule
-            mode={mode}
-            session={activeSession}
-            tasks={tasks}
-            remainingSeconds={remainingSeconds}
-            defaultFocusSeconds={settings.defaultFocusSeconds}
-            elapsedSeconds={elapsedSeconds}
-          />
-        </div>
 
         <section className="min-h-0 overflow-y-auto py-4">
           <div className="grid gap-4">
