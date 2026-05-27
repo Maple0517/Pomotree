@@ -163,16 +163,17 @@ fn clamp_axis(value: i32, min: i32, max: i32) -> i32 {
     }
 }
 
-fn dashboard_url() -> WebviewUrl {
+fn dashboard_url(app: &AppHandle) -> WebviewUrl {
     if tauri::is_dev() {
-        WebviewUrl::External(
-            "http://localhost:3000/"
-                .parse()
-                .expect("valid dashboard dev URL"),
-        )
-    } else {
-        WebviewUrl::App("index.html".into())
+        if let Some(mut url) = app.config().build.dev_url.clone() {
+            url.set_path("/");
+            url.set_query(None);
+            url.set_fragment(None);
+            return WebviewUrl::External(url);
+        }
     }
+
+    WebviewUrl::App("index.html".into())
 }
 
 fn open_dashboard_window(app: &AppHandle) {
@@ -183,7 +184,7 @@ fn open_dashboard_window(app: &AppHandle) {
         return;
     }
 
-    let _ = WebviewWindowBuilder::new(app, DASHBOARD_WINDOW_LABEL, dashboard_url())
+    let _ = WebviewWindowBuilder::new(app, DASHBOARD_WINDOW_LABEL, dashboard_url(app))
         .title("Pomotree Dashboard")
         .inner_size(1100.0, 760.0)
         .min_inner_size(900.0, 620.0)
