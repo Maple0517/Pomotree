@@ -234,8 +234,6 @@ pub fn run() {
             )?;
 
             TrayIconBuilder::with_id(TRAY_ID)
-                .icon(app.default_window_icon().expect("missing app icon").clone())
-                .icon_as_template(true)
                 .tooltip("Pomotree")
                 .title("🍅")
                 .menu(&tray_menu)
