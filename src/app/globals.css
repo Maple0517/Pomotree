@@ -86,11 +86,11 @@ html.menubar-popover-root {
   --menubar-placeholder: rgba(242, 240, 237, 0.28);
   --menubar-border: rgba(255, 255, 255, 0.075);
   --menubar-border-strong: rgba(255, 255, 255, 0.13);
-  background: transparent;
+  background: var(--menubar-bg);
 }
 
 body.menubar-popover-body {
-  background: transparent;
+  background: var(--menubar-bg);
 }
 
 .menubar-shell {
@@ -133,7 +133,7 @@ body.menubar-popover-body {
 html.menubar-popover-root,
 body.menubar-popover-body {
   min-height: 0;
-  background: transparent;
+  background: var(--menubar-bg);
   overflow: hidden;
 }
 
