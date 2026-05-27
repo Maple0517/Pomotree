@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { Check, CheckCircle2, ChevronDown, Circle, ExternalLink, Lightbulb, Pause, Pencil, Play, Settings, Square } from "lucide-react";
 import { getTaskPathIds } from "@/lib/services/taskSelectors";
 import { useAppStore } from "@/lib/store/useAppStore";
 import { computeRemainingSeconds, formatClock } from "@/lib/utils/timer";
@@ -18,11 +19,6 @@ type ActionState = {
 const MENUBAR_WINDOW = {
   width: 380,
   height: 560,
-} as const;
-
-const SHELL_LAYOUT = {
-  headerHeight: 44,
-  actionBarHeight: 148,
 } as const;
 
 const MENUBAR_FORMS = {
@@ -47,13 +43,6 @@ function taskPath(tasks: Task[], taskId: string | null | undefined) {
     .join(" / ");
 }
 
-function statusHeader(session: FocusSession | undefined, remainingSeconds: number) {
-  if (!session) return { icon: "○", text: "Ready to focus" };
-  if (session.status === "finishing") return { icon: "✅", text: "Focus complete" };
-  if (session.status === "paused") return { icon: "⏸", text: `${formatClock(remainingSeconds)} paused` };
-  return { icon: "🍅", text: formatClock(remainingSeconds) };
-}
-
 function menubarStatusTitle(session: FocusSession | undefined, remainingSeconds: number) {
   if (!session) return "🍅";
   if (session.status === "finishing") return "✅ Done";
@@ -74,7 +63,9 @@ function invokeTauriCommand(command: string, args?: Record<string, unknown>) {
     .catch(() => {});
 }
 
-function PrimaryButton({ children, disabled, form, name, onClick, type = "button", value }: { children: React.ReactNode; disabled?: boolean; form?: string; name?: string; onClick?: () => void; type?: "button" | "submit"; value?: string }) {
+function PrimaryButton({ children, disabled, form, name, onClick, tone = "default", type = "button", value }: { children: React.ReactNode; disabled?: boolean; form?: string; name?: string; onClick?: () => void; tone?: "default" | "hot"; type?: "button" | "submit"; value?: string }) {
+  const toneClass = tone === "hot" ? "bg-[#ff5a1f] text-white shadow-[0_10px_24px_rgba(255,90,31,0.28)]" : "bg-[#f3f0ec] text-[#111315] shadow-[0_10px_26px_rgba(0,0,0,0.22)]";
+
   return (
     <button
       type={type}
@@ -83,7 +74,7 @@ function PrimaryButton({ children, disabled, form, name, onClick, type = "button
       name={name}
       onClick={onClick}
       value={value}
-      className="h-11 w-full rounded-xl bg-[var(--primary)] px-4 text-sm font-semibold text-[var(--primary-foreground)] disabled:opacity-40"
+      className={`menubar-button h-[54px] w-full rounded-[10px] px-4 text-[17px] font-semibold ${toneClass} disabled:opacity-75`}
     >
       {children}
     </button>
@@ -99,11 +90,15 @@ function SecondaryButton({ children, disabled, form, name, onClick, type = "butt
       name={name}
       onClick={onClick}
       value={value}
-      className="h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 text-sm font-medium text-[var(--foreground)] disabled:opacity-40"
+      className="menubar-button h-[54px] w-full rounded-[10px] border border-[var(--menubar-border-strong)] bg-transparent px-4 text-[17px] font-semibold text-[var(--menubar-text)] disabled:opacity-75"
     >
       {children}
     </button>
   );
+}
+
+function IconText({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
+  return <span className="inline-flex items-center justify-center gap-2.5">{icon}{children}</span>;
 }
 
 function OpenDashboardButton() {
@@ -120,29 +115,151 @@ function OpenDashboardButton() {
     <button
       type="button"
       onClick={openDashboard}
-      className="flex h-8 w-full items-center justify-between rounded-xl px-1 text-sm font-medium text-[var(--muted-strong)] hover:text-[var(--foreground)]"
+      className="menubar-dashboard-row flex h-[62px] w-full items-center justify-between px-5 text-[14px] font-semibold text-[var(--menubar-muted-strong)]"
     >
-      <span>Open Dashboard</span>
-      <span aria-hidden="true">↗</span>
+      <span className="flex items-center gap-3">
+        <span className="grid h-8 w-8 place-items-center rounded-full bg-black text-[18px] font-semibold text-[#d8d5d1] shadow-[0_8px_18px_rgba(0,0,0,0.35)]">N</span>
+        <span>Open Dashboard</span>
+      </span>
+      <ExternalLink size={23} strokeWidth={1.8} aria-hidden="true" />
     </button>
+  );
+}
+
+function SettingsButton() {
+  return (
+    <button
+      type="button"
+      aria-label="Settings placeholder"
+      title="Settings live in Dashboard for v0"
+      className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-full border border-[var(--menubar-border)] bg-[#10151a]/60 text-[var(--menubar-text)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.03)]"
+    >
+      <Settings size={21} strokeWidth={2.2} />
+    </button>
+  );
+}
+
+function IdleStartForm({
+  tasks,
+  defaultFocusSeconds,
+  onCanStartChange,
+  onStart,
+}: {
+  tasks: Task[];
+  defaultFocusSeconds: number;
+  onCanStartChange: (canStart: boolean) => void;
+  onStart: (taskId: string | null, intention: string, plannedSeconds: number) => Promise<void>;
+}) {
+  const [intention, setIntention] = useState("");
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [durationPreset, setDurationPreset] = useState<DurationPreset>(defaultFocusSeconds === 3000 ? 50 : 25);
+  const [customMinutes, setCustomMinutes] = useState(String(Math.max(1, Math.round(defaultFocusSeconds / 60))));
+  const activeTasks = useMemo(() => tasks.filter((task) => task.status !== "archived" && task.status !== "done"), [tasks]);
+  const plannedSeconds = durationPreset === "custom" ? Math.max(1, Number(customMinutes) || 1) * 60 : durationPreset * 60;
+  const canStart = Boolean(intention.trim() || selectedTaskId);
+
+  const updateIntention = (value: string) => {
+    setIntention(value);
+    onCanStartChange(Boolean(value.trim() || selectedTaskId));
+  };
+
+  const updateSelectedTaskId = (value: string) => {
+    const nextTaskId = value || null;
+    setSelectedTaskId(nextTaskId);
+    onCanStartChange(Boolean(intention.trim() || nextTaskId));
+  };
+
+  const submit = async (event?: FormEvent) => {
+    event?.preventDefault();
+    if (!canStart) return;
+    await onStart(selectedTaskId, intention.trim(), plannedSeconds);
+    setIntention("");
+  };
+
+  return (
+    <form id={MENUBAR_FORMS.idle} className="grid gap-[26px]" onSubmit={(event) => void submit(event)}>
+      <div className="grid gap-3">
+        <label className="text-[15px] font-medium text-[var(--menubar-muted-strong)]" htmlFor="menubar-intention">
+          Intent
+        </label>
+        <input
+          id="menubar-intention"
+          value={intention}
+          onChange={(event) => updateIntention(event.target.value)}
+          className="h-[58px] w-full rounded-[9px] border border-[var(--menubar-border-strong)] bg-transparent px-4 text-[16px] font-medium outline-none placeholder:text-[var(--menubar-placeholder)]"
+          placeholder="What are you working on?"
+        />
+      </div>
+
+      {activeTasks.length ? (
+        <div className="grid gap-3">
+          <label className="text-[15px] font-medium text-[var(--menubar-muted-strong)]" htmlFor="menubar-task">Task</label>
+          <div className="relative">
+            <select
+              id="menubar-task"
+              value={selectedTaskId ?? ""}
+              onChange={(event) => updateSelectedTaskId(event.target.value)}
+              className="h-[46px] w-full appearance-none rounded-[9px] border border-[var(--menubar-border-strong)] bg-transparent px-4 pr-10 text-[15px] font-medium outline-none"
+            >
+              <option value="">Start unassigned</option>
+              {activeTasks.map((task) => (
+                <option key={task.id} value={task.id}>{taskPath(tasks, task.id) ?? task.title}</option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[var(--menubar-muted)]" size={18} />
+          </div>
+        </div>
+      ) : null}
+
+      <div className="grid gap-3">
+        <p className="text-[15px] font-medium text-[var(--menubar-muted-strong)]">Duration</p>
+        <div className="grid grid-cols-3 gap-2.5">
+          {([25, 50, "custom"] as const).map((preset) => {
+            const selected = durationPreset === preset;
+            return (
+              <button
+                key={preset}
+                type="button"
+                onClick={() => setDurationPreset(preset)}
+                className={`h-[42px] rounded-[9px] border px-2 text-[15px] font-semibold ${selected ? "border-[#ebe8e3] bg-[#f3f0ec] text-[#111315] shadow-[0_8px_20px_rgba(0,0,0,0.22)]" : "border-[var(--menubar-border-strong)] bg-transparent text-[var(--menubar-muted-strong)]"}`}
+              >
+                {preset === "custom" ? "Custom" : `${preset} min`}
+              </button>
+            );
+          })}
+        </div>
+        {durationPreset === "custom" ? (
+          <input
+            aria-label="Custom minutes"
+            type="number"
+            min={1}
+            max={240}
+            inputMode="numeric"
+            value={customMinutes}
+            onChange={(event) => setCustomMinutes(event.target.value)}
+            className="h-[42px] w-full rounded-[9px] border border-[var(--menubar-border-strong)] bg-transparent px-4 text-[15px] outline-none"
+          />
+        ) : null}
+      </div>
+
+      <div className="flex items-center gap-3 rounded-[9px] border border-[var(--menubar-border)] bg-[var(--menubar-soft)] px-4 py-3 text-[14px] leading-5 text-[var(--menubar-muted-strong)]">
+        <Lightbulb size={22} strokeWidth={1.7} className="shrink-0 text-[var(--menubar-muted)]" />
+        <p>Set an intention to stay focused and make progress.</p>
+      </div>
+    </form>
   );
 }
 
 function ContextBlock({ session, tasks }: { session: FocusSession; tasks: Task[] }) {
   const path = session.taskPathSnapshot ?? taskPath(tasks, session.taskId);
-  const hasGoal = Boolean(session.intention?.trim());
+  const title = session.intention?.trim() || path || "No goal written";
 
   return (
-    <section className="grid gap-3">
-      {path ? <p className="line-clamp-2 text-[13px] leading-5 text-[var(--muted)]">{path}</p> : null}
-      {hasGoal || !path ? (
-        <div className="grid gap-1.5">
-          {path ? <p className="text-xs font-medium text-[var(--muted)]">Goal</p> : null}
-          <p className="line-clamp-2 text-[15px] font-semibold leading-5 text-[var(--foreground)]">
-            {session.intention?.trim() || "No goal written"}
-          </p>
-        </div>
-      ) : null}
+    <section className="flex items-start justify-between gap-3">
+      <h2 className="line-clamp-2 text-[22px] font-bold leading-[1.18] tracking-[-0.02em] text-[var(--menubar-text)]">{title}</h2>
+      <button type="button" className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full text-[var(--menubar-muted-strong)]" aria-label="Edit in dashboard">
+        <Pencil size={21} strokeWidth={1.8} />
+      </button>
     </section>
   );
 }
@@ -153,7 +270,7 @@ function MenubarInterruptionInput({ disabled, onSave }: { disabled?: boolean; on
 
   useEffect(() => {
     if (!savedText) return;
-    const id = window.setTimeout(() => setSavedText(null), 2000);
+    const id = window.setTimeout(() => setSavedText(null), 5000);
     return () => window.clearTimeout(id);
   }, [savedText]);
 
@@ -166,49 +283,58 @@ function MenubarInterruptionInput({ disabled, onSave }: { disabled?: boolean; on
   };
 
   return (
-    <section className="grid gap-2">
-      <label className="text-xs font-medium text-[var(--muted)]" htmlFor="menubar-interruption">
-        Interruption
+    <section className="grid gap-3">
+      <label className="text-[15px] font-bold text-[var(--menubar-muted-strong)]" htmlFor="menubar-interruption">
+        Quick capture
       </label>
-      <input
-        id="menubar-interruption"
-        value={draft}
-        disabled={disabled}
-        onChange={(event) => setDraft(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            void save();
-          }
-        }}
-        className="h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-sm outline-none placeholder:text-[var(--placeholder)] disabled:opacity-50"
-        placeholder="突然想到什么？Enter 保存"
-      />
+      <div className="relative">
+        <input
+          id="menubar-interruption"
+          value={draft}
+          disabled={disabled}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              void save();
+            }
+          }}
+          className="h-[78px] w-full rounded-[9px] border border-[var(--menubar-border-strong)] bg-transparent px-4 pr-[76px] text-[16px] font-medium outline-none placeholder:text-[var(--menubar-placeholder)] disabled:opacity-50"
+          placeholder="突然想到什么？ Enter 保存"
+        />
+        {savedText ? (
+          <span className="absolute right-4 top-1/2 inline-flex -translate-y-1/2 items-center gap-1 text-[12px] font-semibold text-[#52d348]">
+            <CheckCircle2 size={16} /> Saved
+          </span>
+        ) : null}
+      </div>
       {savedText ? (
-        <div className="rounded-xl border border-[var(--info-border)] bg-[var(--info-bg)] px-3 py-2 text-sm text-[var(--info-text)]">
-          <p className="font-semibold">✅ Interruption saved</p>
-          <p className="mt-0.5 line-clamp-2">已记录：{savedText}</p>
-        </div>
+        <p className="flex items-center gap-2 text-[14px] font-semibold text-[var(--menubar-muted-strong)]">
+          <CheckCircle2 size={19} className="text-[#52d348]" /> 已记录：{savedText}
+        </p>
       ) : null}
+      <p className="flex items-center gap-2 rounded-[8px] bg-[var(--menubar-soft)] px-4 py-2.5 text-[13px] font-semibold text-[var(--menubar-muted)]">
+        <Circle size={15} /> 记录后继续你的专注，不打断思路。
+      </p>
     </section>
   );
 }
 
 function RunningStage({ session, tasks, busy, onInterruption }: { session: FocusSession; tasks: Task[]; busy: boolean; onInterruption: (text: string) => Promise<void> }) {
   return (
-    <>
+    <div className="grid gap-[22px]">
       <ContextBlock session={session} tasks={tasks} />
       <MenubarInterruptionInput disabled={busy} onSave={onInterruption} />
-    </>
+    </div>
   );
 }
 
 function PausedStage({ session, tasks, busy, onInterruption }: { session: FocusSession; tasks: Task[]; busy: boolean; onInterruption: (text: string) => Promise<void> }) {
   return (
-    <>
+    <div className="grid gap-[22px]">
       <ContextBlock session={session} tasks={tasks} />
       <MenubarInterruptionInput disabled={busy} onSave={onInterruption} />
-    </>
+    </div>
   );
 }
 
@@ -226,6 +352,7 @@ function FinishForm({
   const activeTasks = useMemo(() => tasks.filter((task) => task.status !== "archived" && task.status !== "done"), [tasks]);
   const currentTaskPath = session.taskPathSnapshot ?? taskPath(tasks, session.taskId);
   const effectiveTaskId = selectedTaskId === undefined ? session.taskId : selectedTaskId;
+  const summaryLength = summary.length;
 
   const submit = async (status: FinishStatus) => {
     await onSave({ status, summary, taskId: selectedTaskId });
@@ -248,136 +375,57 @@ function FinishForm({
   };
 
   return (
-    <form id={MENUBAR_FORMS.finish} className="grid gap-4" onSubmit={onSubmit}>
-      <div className="grid gap-2">
-        <label className="text-[15px] font-semibold" htmlFor="menubar-summary">What did you complete?</label>
-        <textarea
-          id="menubar-summary"
-          value={summary}
-          onChange={(event) => setSummary(event.target.value)}
-          onKeyDown={onTextareaKeyDown}
-          className="min-h-28 w-full resize-none rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 text-sm outline-none placeholder:text-[var(--placeholder)]"
-          placeholder="Write a short summary..."
-        />
+    <form id={MENUBAR_FORMS.finish} className="grid gap-[22px]" onSubmit={onSubmit}>
+      <section className="grid gap-3">
+        <div className="flex items-center gap-3">
+          <span className="grid h-10 w-10 place-items-center rounded-full bg-[#55ce46] text-white shadow-[0_10px_22px_rgba(85,206,70,0.3)]">
+            <Check size={27} strokeWidth={3.2} />
+          </span>
+          <div>
+            <h2 className="text-[19px] font-bold tracking-[-0.02em] text-[var(--menubar-text)]">Focus complete</h2>
+            <p className="mt-2 text-[16px] font-medium text-[var(--menubar-muted-strong)]">Great work! You stayed focused.</p>
+          </div>
+        </div>
+        <div className="mt-1 flex gap-6 border-b border-[var(--menubar-border)] pb-3 text-[14px] text-[var(--menubar-muted-strong)]">
+          <span className="font-bold text-[var(--menubar-text)]">{Math.round(session.plannedSeconds / 60)} min</span>
+          <span>focused</span>
+        </div>
+      </section>
+
+      <div className="grid gap-3">
+        <label className="text-[15px] font-medium text-[var(--menubar-muted-strong)]" htmlFor="menubar-summary">What did you complete?</label>
+        <div className="relative">
+          <textarea
+            id="menubar-summary"
+            maxLength={120}
+            value={summary}
+            onChange={(event) => setSummary(event.target.value)}
+            onKeyDown={onTextareaKeyDown}
+            className="h-[78px] w-full resize-none rounded-[9px] border border-[var(--menubar-border-strong)] bg-transparent p-3 pr-14 text-[14px] font-medium outline-none placeholder:text-[var(--menubar-placeholder)]"
+            placeholder="Write a short summary..."
+          />
+          <span className="absolute bottom-3 right-3 text-[13px] font-semibold text-[var(--menubar-muted)]">{summaryLength}/120</span>
+        </div>
       </div>
-      <div className="grid gap-2">
-        <label className="text-xs font-medium text-[var(--muted)]" htmlFor="menubar-attribution">Attribution</label>
-        <select
-          id="menubar-attribution"
-          value={effectiveTaskId ?? ""}
-          onChange={(event) => setSelectedTaskId(event.target.value || null)}
-          className="h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-sm outline-none"
-        >
-          {session.taskId && currentTaskPath && !activeTasks.some((task) => task.id === session.taskId) ? (
-            <option value={session.taskId} disabled>{currentTaskPath}</option>
-          ) : null}
-          <option value="">Unassigned / intention</option>
-          {activeTasks.map((task) => (
-            <option key={task.id} value={task.id}>{taskPath(tasks, task.id) ?? task.title}</option>
-          ))}
-        </select>
-      </div>
-    </form>
-  );
-}
-
-function IdleStartForm({
-  tasks,
-  defaultFocusSeconds,
-  onCanStartChange,
-  onStart,
-}: {
-  tasks: Task[];
-  defaultFocusSeconds: number;
-  onCanStartChange: (canStart: boolean) => void;
-  onStart: (taskId: string | null, intention: string, plannedSeconds: number) => Promise<void>;
-}) {
-  const [intention, setIntention] = useState("");
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const [durationPreset, setDurationPreset] = useState<DurationPreset>(defaultFocusSeconds === 3000 ? 50 : 25);
-  const [customMinutes, setCustomMinutes] = useState(String(Math.max(1, Math.round(defaultFocusSeconds / 60))));
-  const activeTasks = useMemo(() => tasks.filter((task) => task.status !== "archived" && task.status !== "done"), [tasks]);
-  const plannedSeconds = durationPreset === "custom" ? Math.max(1, Number(customMinutes) || 1) * 60 : durationPreset * 60;
-  const canStart = Boolean(intention.trim() || selectedTaskId);
-  const noTasks = activeTasks.length === 0;
-
-  const updateIntention = (value: string) => {
-    setIntention(value);
-    onCanStartChange(Boolean(value.trim() || selectedTaskId));
-  };
-
-  const updateSelectedTaskId = (value: string) => {
-    const nextTaskId = value || null;
-    setSelectedTaskId(nextTaskId);
-    onCanStartChange(Boolean(intention.trim() || nextTaskId));
-  };
-
-  const submit = async (event?: FormEvent) => {
-    event?.preventDefault();
-    if (!canStart) return;
-    await onStart(selectedTaskId, intention.trim(), plannedSeconds);
-    setIntention("");
-  };
-
-  return (
-    <form id={MENUBAR_FORMS.idle} className="grid gap-4" onSubmit={(event) => void submit(event)}>
-      <div className="grid gap-2">
-        <label className="text-[15px] font-semibold" htmlFor="menubar-intention">
-          {noTasks ? "Start with an intention" : "What are you focusing on?"}
-        </label>
-        <input
-          id="menubar-intention"
-          value={intention}
-          onChange={(event) => updateIntention(event.target.value)}
-          className="h-11 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-sm outline-none placeholder:text-[var(--placeholder)]"
-          placeholder={noTasks ? "What are you working on?" : "输入任务或意图..."}
-        />
-      </div>
-      {activeTasks.length ? (
-        <div className="grid gap-2">
-          <label className="text-xs font-medium text-[var(--muted)]" htmlFor="menubar-task">Select task</label>
+      <div className="grid gap-3">
+        <label className="text-[15px] font-medium text-[var(--menubar-muted-strong)]" htmlFor="menubar-attribution">Attribution</label>
+        <div className="relative">
           <select
-            id="menubar-task"
-            value={selectedTaskId ?? ""}
-            onChange={(event) => updateSelectedTaskId(event.target.value)}
-            className="h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-sm outline-none"
+            id="menubar-attribution"
+            value={effectiveTaskId ?? ""}
+            onChange={(event) => setSelectedTaskId(event.target.value || null)}
+            className="h-[44px] w-full appearance-none rounded-[9px] border border-[var(--menubar-border-strong)] bg-transparent px-3 pr-10 text-[15px] font-semibold outline-none"
           >
-            <option value="">Start unassigned</option>
+            {session.taskId && currentTaskPath && !activeTasks.some((task) => task.id === session.taskId) ? (
+              <option value={session.taskId} disabled>{currentTaskPath}</option>
+            ) : null}
+            <option value="">Unassigned / intention</option>
             {activeTasks.map((task) => (
               <option key={task.id} value={task.id}>{taskPath(tasks, task.id) ?? task.title}</option>
             ))}
           </select>
+          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[var(--menubar-muted)]" size={18} />
         </div>
-      ) : null}
-      <div className="grid gap-2">
-        <p className="text-xs font-medium text-[var(--muted)]">Duration</p>
-        <div className="grid grid-cols-3 gap-2">
-          {([25, 50, "custom"] as const).map((preset) => {
-            const selected = durationPreset === preset;
-            return (
-              <button
-                key={preset}
-                type="button"
-                onClick={() => setDurationPreset(preset)}
-                className={`h-9 rounded-xl border px-2 text-sm font-medium ${selected ? "border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)]" : "border-[var(--border)] bg-[var(--surface)]"}`}
-              >
-                {preset === "custom" ? "Custom" : `${preset} min`}
-              </button>
-            );
-          })}
-        </div>
-        {durationPreset === "custom" ? (
-          <input
-            aria-label="Custom minutes"
-            type="number"
-            min={1}
-            max={240}
-            inputMode="numeric"
-            value={customMinutes}
-            onChange={(event) => setCustomMinutes(event.target.value)}
-            className="h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-sm outline-none"
-          />
-        ) : null}
       </div>
     </form>
   );
@@ -400,60 +448,70 @@ function ActionBar({
   onResume: () => void;
   onDiscard: () => void;
 }) {
-  const secondarySlots = (slots: React.ReactNode[]) => (
-    <div className="grid grid-cols-2 gap-2">
-      {slots.map((slot, index) => (
-        <div key={index} className="h-10">
-          {slot}
-        </div>
-      ))}
-      {Array.from({ length: Math.max(0, 2 - slots.length) }).map((_, index) => (
-        <div key={`empty-action-${index}`} aria-hidden="true" className="h-10" />
-      ))}
-    </div>
-  );
-
   if (mode === "running") {
     return (
-      <footer className="grid shrink-0 content-start gap-2 border-t border-[var(--border-subtle)] pt-3" style={{ height: SHELL_LAYOUT.actionBarHeight }}>
-        <PrimaryButton disabled={busy} onClick={onFinish}>Finish</PrimaryButton>
-        {secondarySlots([<SecondaryButton key="pause" disabled={busy} onClick={onPause}>Pause</SecondaryButton>])}
-        <OpenDashboardButton />
-      </footer>
+      <div className="grid grid-cols-2 gap-3 px-5 pb-[18px] pt-3">
+        <SecondaryButton disabled={busy} onClick={onPause}><IconText icon={<Pause size={20} fill="currentColor" />}>Pause</IconText></SecondaryButton>
+        <PrimaryButton tone="hot" disabled={busy} onClick={onFinish}><IconText icon={<Square size={16} fill="currentColor" />}>Finish</IconText></PrimaryButton>
+      </div>
     );
   }
 
   if (mode === "paused") {
     return (
-      <footer className="grid shrink-0 content-start gap-2 border-t border-[var(--border-subtle)] pt-3" style={{ height: SHELL_LAYOUT.actionBarHeight }}>
-        <PrimaryButton disabled={busy} onClick={onResume}>Resume</PrimaryButton>
-        {secondarySlots([
-          <SecondaryButton key="finish" disabled={busy} onClick={onFinish}>Finish</SecondaryButton>,
-          <SecondaryButton key="discard" disabled={busy} onClick={onDiscard}>Discard</SecondaryButton>,
-        ])}
-        <OpenDashboardButton />
-      </footer>
+      <div className="grid grid-cols-2 gap-3 px-5 pb-[18px] pt-3">
+        <PrimaryButton disabled={busy} onClick={onResume}><IconText icon={<Play size={18} fill="currentColor" />}>Resume</IconText></PrimaryButton>
+        <SecondaryButton disabled={busy} onClick={onDiscard}>Discard</SecondaryButton>
+        <div className="col-span-2"><PrimaryButton tone="hot" disabled={busy} onClick={onFinish}>Finish</PrimaryButton></div>
+      </div>
     );
   }
 
   if (mode === "finishing") {
     return (
-      <footer className="grid shrink-0 content-start gap-2 border-t border-[var(--border-subtle)] pt-3" style={{ height: SHELL_LAYOUT.actionBarHeight }}>
-        <PrimaryButton type="submit" form={MENUBAR_FORMS.finish} name="status" value="completed" disabled={busy}>Save completed</PrimaryButton>
-        {secondarySlots([
-          <SecondaryButton key="partial" type="submit" form={MENUBAR_FORMS.finish} name="status" value="partial" disabled={busy}>Save partial</SecondaryButton>,
-        ])}
-        <OpenDashboardButton />
-      </footer>
+      <div className="relative z-10 px-5 pb-[22px] pt-1">
+        <PrimaryButton type="submit" form={MENUBAR_FORMS.finish} name="status" value="completed" disabled={busy}>Save Completed</PrimaryButton>
+      </div>
     );
   }
 
   return (
-    <footer className="grid shrink-0 content-start gap-2 border-t border-[var(--border-subtle)] pt-3" style={{ height: SHELL_LAYOUT.actionBarHeight }}>
-      <PrimaryButton type="submit" form={MENUBAR_FORMS.idle} disabled={busy || !canStartIdleFocus}>Start Focus</PrimaryButton>
-      {secondarySlots([])}
-      <OpenDashboardButton />
-    </footer>
+    <div className="px-5 pb-[16px] pt-3">
+      <PrimaryButton type="submit" form={MENUBAR_FORMS.idle} disabled={busy || !canStartIdleFocus}>
+        <IconText icon={<Play size={19} fill="currentColor" />}>Start Focus</IconText>
+      </PrimaryButton>
+    </div>
+  );
+}
+
+function MenubarHeader({ activeSession, remainingSeconds }: { activeSession: FocusSession | undefined; remainingSeconds: number }) {
+  if (!activeSession) {
+    return (
+      <header className="flex items-start justify-between gap-3 px-5 pt-[22px]">
+        <div className="flex min-w-0 items-start gap-3">
+          <Circle className="mt-1 shrink-0 text-[var(--menubar-muted-strong)]" size={23} strokeWidth={2} />
+          <div>
+            <h1 className="text-[22px] font-bold leading-7 tracking-[-0.03em] text-[var(--menubar-text)]">Ready to focus</h1>
+            <p className="mt-1 text-[15px] font-medium text-[var(--menubar-muted)]">No active session</p>
+          </div>
+        </div>
+        <SettingsButton />
+      </header>
+    );
+  }
+
+  if (activeSession.status === "finishing") return null;
+
+  const isPaused = activeSession.status === "paused";
+
+  return (
+    <header className="flex items-start justify-between gap-3 px-5 pt-[22px]">
+      <div className="flex min-w-0 items-center gap-3">
+        <span className="text-[34px] leading-none" aria-hidden="true">{isPaused ? "⏸" : "🍅"}</span>
+        <h1 className="text-[38px] font-bold leading-none tracking-[-0.04em] text-[var(--menubar-text)]">{isPaused ? `${formatClock(remainingSeconds)} paused` : formatClock(remainingSeconds)}</h1>
+      </div>
+      <SettingsButton />
+    </header>
   );
 }
 
@@ -510,7 +568,6 @@ export function MenubarApp() {
   const activeSession = sessions.find((session) => ["running", "paused", "finishing"].includes(session.status));
   const mode = menubarMode(activeSession);
   const remainingSeconds = activeSession ? computeRemainingSeconds(activeSession, pauses, now) : settings.defaultFocusSeconds;
-  const header = statusHeader(activeSession, remainingSeconds);
   const trayTitle = menubarStatusTitle(activeSession, remainingSeconds);
 
   useEffect(() => {
@@ -542,77 +599,63 @@ export function MenubarApp() {
   };
 
   const busy = action.busy || loading;
+  const contentPadding = activeSession?.status === "finishing" ? "px-5 pt-5 pb-0" : "px-5 pt-[26px] pb-2";
 
   return (
     <main
-      className="bg-transparent text-[var(--foreground)]"
+      className="bg-[#03080c] text-[var(--menubar-text)]"
       style={{ width: MENUBAR_WINDOW.width, height: MENUBAR_WINDOW.height }}
     >
-      <section className="grid h-full w-full grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-[20px] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[0_18px_45px_rgba(0,0,0,0.14)]">
-        <header
-          className="flex shrink-0 items-center justify-between gap-3"
-          style={{ height: SHELL_LAYOUT.headerHeight }}
-        >
-          <div className="flex min-w-0 items-center gap-2">
-            <span className="text-base leading-none" aria-hidden="true">{header.icon}</span>
-            <p className="min-w-0 truncate text-[15px] font-semibold tracking-tight">{header.text}</p>
-          </div>
-          <button
-            type="button"
-            aria-label="Settings placeholder"
-            title="Settings live in Dashboard for v0"
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-[var(--border)] text-sm text-[var(--muted)]"
-          >
-            ⚙
-          </button>
-        </header>
+      <section className="menubar-shell flex h-full w-full flex-col overflow-hidden rounded-[19px] border border-[var(--menubar-border)] [background:var(--menubar-surface)] shadow-[0_20px_60px_rgba(0,0,0,0.45)]">
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <MenubarHeader activeSession={activeSession} remainingSeconds={remainingSeconds} />
 
+          <section className={contentPadding}>
+            <div className="grid gap-4">
+              {!ready && loading ? <p className="rounded-[9px] bg-[var(--menubar-soft)] px-3 py-2 text-sm text-[var(--menubar-muted)]">Loading…</p> : null}
+              {(error || action.message) ? (
+                <p className="rounded-[9px] border border-[var(--danger-border)] bg-[var(--danger-bg)] px-3 py-2 text-sm text-[var(--danger-text)]">
+                  {action.message ?? error}
+                </p>
+              ) : null}
 
-        <section className="min-h-0 overflow-y-auto py-4">
-          <div className="grid gap-4">
-            {!ready && loading ? <p className="rounded-xl bg-[var(--surface-soft)] px-3 py-2 text-sm text-[var(--muted)]">Loading…</p> : null}
-            {(error || action.message) ? (
-              <p className="rounded-xl border border-[var(--danger-border)] bg-[var(--danger-bg)] px-3 py-2 text-sm text-[var(--danger-text)]">
-                {action.message ?? error}
-              </p>
-            ) : null}
-
-            {activeSession?.status === "running" ? (
-              <RunningStage
-                session={activeSession}
-                tasks={tasks}
-                busy={busy}
-                onInterruption={(text) => createInterruption(text)}
-              />
-            ) : activeSession?.status === "paused" ? (
-              <PausedStage
-                session={activeSession}
-                tasks={tasks}
-                busy={busy}
-                onInterruption={(text) => createInterruption(text)}
-              />
-            ) : activeSession?.status === "finishing" ? (
-              <FinishForm
-                session={activeSession}
-                tasks={tasks}
-                onSave={(input) => runAction(async () => {
-                  await saveFinish(input);
-                  setCanStartIdleFocus(false);
-                }, "Failed to save session")}
-              />
-            ) : (
-              <IdleStartForm
-                tasks={tasks}
-                defaultFocusSeconds={settings.defaultFocusSeconds}
-                onCanStartChange={setCanStartIdleFocus}
-                onStart={(taskId, intention, plannedSeconds) => runAction(async () => {
-                  await startFocus(taskId, intention, plannedSeconds);
-                  setCanStartIdleFocus(false);
-                }, "Failed to start focus")}
-              />
-            )}
-          </div>
-        </section>
+              {activeSession?.status === "running" ? (
+                <RunningStage
+                  session={activeSession}
+                  tasks={tasks}
+                  busy={busy}
+                  onInterruption={(text) => createInterruption(text)}
+                />
+              ) : activeSession?.status === "paused" ? (
+                <PausedStage
+                  session={activeSession}
+                  tasks={tasks}
+                  busy={busy}
+                  onInterruption={(text) => createInterruption(text)}
+                />
+              ) : activeSession?.status === "finishing" ? (
+                <FinishForm
+                  session={activeSession}
+                  tasks={tasks}
+                  onSave={(input) => runAction(async () => {
+                    await saveFinish(input);
+                    setCanStartIdleFocus(false);
+                  }, "Failed to save session")}
+                />
+              ) : (
+                <IdleStartForm
+                  tasks={tasks}
+                  defaultFocusSeconds={settings.defaultFocusSeconds}
+                  onCanStartChange={setCanStartIdleFocus}
+                  onStart={(taskId, intention, plannedSeconds) => runAction(async () => {
+                    await startFocus(taskId, intention, plannedSeconds);
+                    setCanStartIdleFocus(false);
+                  }, "Failed to start focus")}
+                />
+              )}
+            </div>
+          </section>
+        </div>
 
         <ActionBar
           mode={mode}
@@ -626,6 +669,10 @@ export function MenubarApp() {
             setCanStartIdleFocus(false);
           }, "Failed to discard session")}
         />
+
+        <div className="border-t border-[var(--menubar-border)]">
+          <OpenDashboardButton />
+        </div>
       </section>
     </main>
   );

@@ -74,6 +74,62 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+
+
+html.menubar-popover-root {
+  --menubar-bg: #03080c;
+  --menubar-surface: radial-gradient(circle at 22% 0%, rgba(46, 55, 64, 0.5), transparent 42%), linear-gradient(145deg, #171d22 0%, #101519 52%, #0c1115 100%);
+  --menubar-soft: rgba(255, 255, 255, 0.045);
+  --menubar-text: #f2f0ed;
+  --menubar-muted: rgba(242, 240, 237, 0.52);
+  --menubar-muted-strong: rgba(242, 240, 237, 0.72);
+  --menubar-placeholder: rgba(242, 240, 237, 0.28);
+  --menubar-border: rgba(255, 255, 255, 0.075);
+  --menubar-border-strong: rgba(255, 255, 255, 0.13);
+  background: transparent;
+}
+
+body.menubar-popover-body {
+  background: transparent;
+}
+
+.menubar-shell {
+  color-scheme: dark;
+}
+
+.menubar-shell input,
+.menubar-shell textarea,
+.menubar-shell select {
+  color: var(--menubar-text);
+}
+
+.menubar-shell select option {
+  background: #11161a;
+  color: var(--menubar-text);
+}
+
+.menubar-shell input:focus,
+.menubar-shell textarea:focus,
+.menubar-shell select:focus {
+  border-color: rgba(255, 255, 255, 0.25);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.04);
+}
+
+.menubar-shell ::placeholder {
+  color: var(--menubar-placeholder);
+}
+
+.menubar-button {
+  transition: transform 140ms ease, filter 140ms ease, border-color 140ms ease, background-color 140ms ease;
+}
+
+.menubar-dashboard-row {
+  background: rgba(6, 10, 13, 0.16);
+}
+
+.menubar-dashboard-row:hover {
+  background: rgba(255, 255, 255, 0.035);
+}
 html.menubar-popover-root,
 body.menubar-popover-body {
   min-height: 0;
@@ -109,14 +165,14 @@ button:disabled {
   cursor: not-allowed;
 }
 
-button:not(:disabled):not([class*="bg-[var(--primary)]"]):hover,
+button:not(:disabled):not(.menubar-button):not([class*="bg-[var(--primary)]"]):hover,
 select:hover,
 summary:hover {
   border-color: var(--muted);
   background-color: var(--surface-soft);
 }
 
-button:not(:disabled)[class*="bg-[var(--primary)]"]:hover {
+button:not(:disabled):not(.menubar-button)[class*="bg-[var(--primary)]"]:hover {
   filter: brightness(0.92);
 }
 
@@ -173,4 +229,12 @@ textarea {
 a {
   color: inherit;
   text-decoration: none;
+}
+
+.menubar-button:not(:disabled):hover {
+  filter: brightness(0.96);
+}
+
+.menubar-button:not(:disabled):active {
+  transform: translateY(1px);
 }
