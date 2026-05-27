@@ -233,7 +233,7 @@ pub fn run() {
                 ],
             )?;
 
-            TrayIconBuilder::with_id(TRAY_ID)
+            let tray_icon = TrayIconBuilder::with_id(TRAY_ID)
                 .tooltip("Pomotree")
                 .title("🍅")
                 .menu(&tray_menu)
@@ -251,6 +251,7 @@ pub fn run() {
                     }
                 })
                 .build(app)?;
+            tray_icon.set_icon(None)?;
 
             show_main_window(app.handle());
             Ok(())
