@@ -4,24 +4,33 @@ import Link from "next/link";
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { getTaskPathIds } from "@/lib/services/taskSelectors";
 import { useAppStore } from "@/lib/store/useAppStore";
-import { computeRemainingSeconds, formatClock } from "@/lib/utils/timer";
+import { computeElapsedSeconds, computeRemainingSeconds, formatClock } from "@/lib/utils/timer";
 import type { FocusSession, Task } from "@/types/domain";
 
 type DurationPreset = 25 | 50 | "custom";
 type MenubarMode = "idle" | "running" | "paused" | "finishing";
+type FinishStatus = "completed" | "partial";
 
 type ActionState = {
   busy: boolean;
   message: string | null;
 };
 
-const MENUBAR_WINDOW_WIDTH = 380;
-const MENUBAR_HEIGHT_LIMITS: Record<MenubarMode, { min: number; max: number }> = {
-  idle: { min: 320, max: 430 },
-  running: { min: 340, max: 470 },
-  paused: { min: 380, max: 500 },
-  finishing: { min: 440, max: 580 },
-};
+const MENUBAR_WINDOW = {
+  width: 380,
+  height: 560,
+} as const;
+
+const SHELL_LAYOUT = {
+  headerHeight: 52,
+  capsuleHeight: 150,
+  actionBarHeight: 116,
+} as const;
+
+const MENUBAR_FORMS = {
+  idle: "menubar-idle-start-form",
+  finish: "menubar-finish-form",
+} as const;
 
 function menubarMode(session: FocusSession | undefined): MenubarMode {
   if (session?.status === "running" || session?.status === "paused" || session?.status === "finishing") {
@@ -29,12 +38,6 @@ function menubarMode(session: FocusSession | undefined): MenubarMode {
   }
 
   return "idle";
-}
-
-function targetWindowHeight(mode: MenubarMode, measuredPanelHeight: number) {
-  const limits = MENUBAR_HEIGHT_LIMITS[mode];
-  const contentHeight = Math.ceil(measuredPanelHeight);
-  return Math.min(limits.max, Math.max(limits.min, contentHeight));
 }
 
 function taskPath(tasks: Task[], taskId: string | null | undefined) {
@@ -73,12 +76,15 @@ function invokeTauriCommand(command: string, args?: Record<string, unknown>) {
     .catch(() => {});
 }
 
-function PrimaryButton({ children, disabled, onClick, type = "button" }: { children: React.ReactNode; disabled?: boolean; onClick?: () => void; type?: "button" | "submit" }) {
+function PrimaryButton({ children, disabled, form, name, onClick, type = "button", value }: { children: React.ReactNode; disabled?: boolean; form?: string; name?: string; onClick?: () => void; type?: "button" | "submit"; value?: string }) {
   return (
     <button
       type={type}
       disabled={disabled}
+      form={form}
+      name={name}
       onClick={onClick}
+      value={value}
       className="h-11 w-full rounded-xl bg-[var(--primary)] px-4 text-sm font-semibold text-[var(--primary-foreground)] disabled:opacity-40"
     >
       {children}
@@ -86,12 +92,15 @@ function PrimaryButton({ children, disabled, onClick, type = "button" }: { child
   );
 }
 
-function SecondaryButton({ children, disabled, onClick, type = "button" }: { children: React.ReactNode; disabled?: boolean; onClick?: () => void; type?: "button" | "submit" }) {
+function SecondaryButton({ children, disabled, form, name, onClick, type = "button", value }: { children: React.ReactNode; disabled?: boolean; form?: string; name?: string; onClick?: () => void; type?: "button" | "submit"; value?: string }) {
   return (
     <button
       type={type}
       disabled={disabled}
+      form={form}
+      name={name}
       onClick={onClick}
+      value={value}
       className="h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 text-sm font-medium text-[var(--foreground)] disabled:opacity-40"
     >
       {children}
@@ -103,7 +112,7 @@ function OpenDashboardButton() {
   return (
     <Link
       href="/"
-      className="flex items-center justify-between rounded-xl px-1 py-2 text-sm font-medium text-[var(--muted-strong)] hover:text-[var(--foreground)]"
+      className="flex h-10 items-center justify-between rounded-xl px-1 text-sm font-medium text-[var(--muted-strong)] hover:text-[var(--foreground)]"
     >
       <span>Open Dashboard</span>
       <span aria-hidden="true">↗</span>
@@ -177,44 +186,50 @@ function MenubarInterruptionInput({ disabled, onSave }: { disabled?: boolean; on
   );
 }
 
-function RunningState({ session, tasks, busy, onPause, onFinish, onInterruption }: { session: FocusSession; tasks: Task[]; busy: boolean; onPause: () => void; onFinish: () => void; onInterruption: (text: string) => Promise<void> }) {
+function RunningStage({ session, tasks, busy, onInterruption }: { session: FocusSession; tasks: Task[]; busy: boolean; onInterruption: (text: string) => Promise<void> }) {
   return (
     <>
       <ContextBlock session={session} tasks={tasks} />
-      <MenubarInterruptionInput disabled={busy} onSave={onInterruption} />
-      <div className="grid grid-cols-2 gap-2">
-        <SecondaryButton disabled={busy} onClick={onPause}>Pause</SecondaryButton>
-        <PrimaryButton disabled={busy} onClick={onFinish}>Finish</PrimaryButton>
-      </div>
-    </>
-  );
-}
-
-function PausedState({ session, tasks, busy, onResume, onFinish, onDiscard, onInterruption }: { session: FocusSession; tasks: Task[]; busy: boolean; onResume: () => void; onFinish: () => void; onDiscard: () => void; onInterruption: (text: string) => Promise<void> }) {
-  return (
-    <>
-      <ContextBlock session={session} tasks={tasks} />
-      <PrimaryButton disabled={busy} onClick={onResume}>Resume</PrimaryButton>
-      <div className="grid grid-cols-2 gap-2">
-        <SecondaryButton disabled={busy} onClick={onFinish}>Finish</SecondaryButton>
-        <SecondaryButton disabled={busy} onClick={onDiscard}>Discard</SecondaryButton>
-      </div>
       <MenubarInterruptionInput disabled={busy} onSave={onInterruption} />
     </>
   );
 }
 
-function FinishForm({ session, tasks, busy, onSave }: { session: FocusSession; tasks: Task[]; busy: boolean; onSave: (input: { status: "completed" | "partial"; summary: string; taskId?: string | null }) => Promise<void> }) {
+function PausedStage({ session, tasks, busy, onInterruption }: { session: FocusSession; tasks: Task[]; busy: boolean; onInterruption: (text: string) => Promise<void> }) {
+  return (
+    <>
+      <ContextBlock session={session} tasks={tasks} />
+      <MenubarInterruptionInput disabled={busy} onSave={onInterruption} />
+    </>
+  );
+}
+
+function FinishForm({
+  session,
+  tasks,
+  onSave,
+}: {
+  session: FocusSession;
+  tasks: Task[];
+  onSave: (input: { status: FinishStatus; summary: string; taskId?: string | null }) => Promise<void>;
+}) {
   const [summary, setSummary] = useState("");
   const [selectedTaskId, setSelectedTaskId] = useState<string | null | undefined>(undefined);
   const activeTasks = useMemo(() => tasks.filter((task) => task.status !== "archived" && task.status !== "done"), [tasks]);
   const currentTaskPath = session.taskPathSnapshot ?? taskPath(tasks, session.taskId);
   const effectiveTaskId = selectedTaskId === undefined ? session.taskId : selectedTaskId;
 
-  const submit = async (status: "completed" | "partial") => {
+  const submit = async (status: FinishStatus) => {
     await onSave({ status, summary, taskId: selectedTaskId });
     setSummary("");
     setSelectedTaskId(undefined);
+  };
+
+  const onSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
+    const status = submitter?.value === "partial" ? "partial" : "completed";
+    void submit(status);
   };
 
   const onTextareaKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -225,7 +240,7 @@ function FinishForm({ session, tasks, busy, onSave }: { session: FocusSession; t
   };
 
   return (
-    <section className="grid gap-4">
+    <form id={MENUBAR_FORMS.finish} className="grid gap-4" onSubmit={onSubmit}>
       <div className="grid gap-2">
         <label className="text-[15px] font-semibold" htmlFor="menubar-summary">What did you complete?</label>
         <textarea
@@ -254,15 +269,21 @@ function FinishForm({ session, tasks, busy, onSave }: { session: FocusSession; t
           ))}
         </select>
       </div>
-      <div className="grid gap-2">
-        <PrimaryButton disabled={busy} onClick={() => void submit("completed")}>Save completed</PrimaryButton>
-        <SecondaryButton disabled={busy} onClick={() => void submit("partial")}>Save partial</SecondaryButton>
-      </div>
-    </section>
+    </form>
   );
 }
 
-function IdleStartForm({ tasks, defaultFocusSeconds, busy, onStart }: { tasks: Task[]; defaultFocusSeconds: number; busy: boolean; onStart: (taskId: string | null, intention: string, plannedSeconds: number) => Promise<void> }) {
+function IdleStartForm({
+  tasks,
+  defaultFocusSeconds,
+  onCanStartChange,
+  onStart,
+}: {
+  tasks: Task[];
+  defaultFocusSeconds: number;
+  onCanStartChange: (canStart: boolean) => void;
+  onStart: (taskId: string | null, intention: string, plannedSeconds: number) => Promise<void>;
+}) {
   const [intention, setIntention] = useState("");
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [durationPreset, setDurationPreset] = useState<DurationPreset>(defaultFocusSeconds === 3000 ? 50 : 25);
@@ -272,6 +293,17 @@ function IdleStartForm({ tasks, defaultFocusSeconds, busy, onStart }: { tasks: T
   const canStart = Boolean(intention.trim() || selectedTaskId);
   const noTasks = activeTasks.length === 0;
 
+  const updateIntention = (value: string) => {
+    setIntention(value);
+    onCanStartChange(Boolean(value.trim() || selectedTaskId));
+  };
+
+  const updateSelectedTaskId = (value: string) => {
+    const nextTaskId = value || null;
+    setSelectedTaskId(nextTaskId);
+    onCanStartChange(Boolean(intention.trim() || nextTaskId));
+  };
+
   const submit = async (event?: FormEvent) => {
     event?.preventDefault();
     if (!canStart) return;
@@ -280,7 +312,7 @@ function IdleStartForm({ tasks, defaultFocusSeconds, busy, onStart }: { tasks: T
   };
 
   return (
-    <form className="grid gap-4" onSubmit={(event) => void submit(event)}>
+    <form id={MENUBAR_FORMS.idle} className="grid gap-4" onSubmit={(event) => void submit(event)}>
       <div className="grid gap-2">
         <label className="text-[15px] font-semibold" htmlFor="menubar-intention">
           {noTasks ? "Start with an intention" : "What are you focusing on?"}
@@ -288,7 +320,7 @@ function IdleStartForm({ tasks, defaultFocusSeconds, busy, onStart }: { tasks: T
         <input
           id="menubar-intention"
           value={intention}
-          onChange={(event) => setIntention(event.target.value)}
+          onChange={(event) => updateIntention(event.target.value)}
           className="h-11 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-sm outline-none placeholder:text-[var(--placeholder)]"
           placeholder={noTasks ? "What are you working on?" : "输入任务或意图..."}
         />
@@ -299,7 +331,7 @@ function IdleStartForm({ tasks, defaultFocusSeconds, busy, onStart }: { tasks: T
           <select
             id="menubar-task"
             value={selectedTaskId ?? ""}
-            onChange={(event) => setSelectedTaskId(event.target.value || null)}
+            onChange={(event) => updateSelectedTaskId(event.target.value)}
             className="h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-sm outline-none"
           >
             <option value="">Start unassigned</option>
@@ -339,8 +371,135 @@ function IdleStartForm({ tasks, defaultFocusSeconds, busy, onStart }: { tasks: T
           />
         ) : null}
       </div>
-      <PrimaryButton type="submit" disabled={!canStart || busy}>Start Focus</PrimaryButton>
     </form>
+  );
+}
+
+function FocusCapsule({
+  mode,
+  session,
+  tasks,
+  remainingSeconds,
+  defaultFocusSeconds,
+  elapsedSeconds,
+}: {
+  mode: MenubarMode;
+  session?: FocusSession;
+  tasks: Task[];
+  remainingSeconds: number;
+  defaultFocusSeconds: number;
+  elapsedSeconds: number;
+}) {
+  const path = session ? (session.taskPathSnapshot ?? taskPath(tasks, session.taskId)) : null;
+  const intention = session?.intention?.trim();
+  const plannedSeconds = session?.plannedSeconds ?? defaultFocusSeconds;
+
+  if (mode === "idle") {
+    return (
+      <section className="grid h-full content-center gap-3 rounded-[24px] border border-[var(--border-subtle)] bg-[var(--surface-soft)] px-5">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">Ready</p>
+          <p className="mt-2 text-4xl font-semibold tracking-[-0.04em] text-[var(--foreground)]">{formatClock(defaultFocusSeconds)}</p>
+        </div>
+        <p className="line-clamp-2 text-sm leading-5 text-[var(--muted-strong)]">Pick a task or write an intention to start a focus capsule.</p>
+      </section>
+    );
+  }
+
+  if (mode === "finishing") {
+    return (
+      <section className="grid h-full content-center gap-3 rounded-[24px] border border-[var(--info-border)] bg-[var(--info-bg)] px-5 text-[var(--info-text)]">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em]">Completed</p>
+          <span className="rounded-full bg-[color-mix(in_srgb,var(--info-text)_12%,transparent)] px-2.5 py-1 text-xs font-semibold">Ready to save</span>
+        </div>
+        <p className="text-4xl font-semibold tracking-[-0.04em]">{formatClock(elapsedSeconds)}</p>
+        <p className="line-clamp-2 text-sm leading-5">Planned {formatClock(plannedSeconds)} · {path || intention || "Unassigned focus"}</p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="grid h-full content-center gap-3 rounded-[24px] border border-[var(--border)] bg-[var(--surface-soft)] px-5">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">{mode === "paused" ? "Paused" : "Focusing"}</p>
+        <span className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-semibold text-[var(--muted-strong)]">
+          {mode === "paused" ? "Hold" : "Live"}
+        </span>
+      </div>
+      <p className="text-5xl font-semibold tracking-[-0.06em] text-[var(--foreground)]">{formatClock(remainingSeconds)}</p>
+      <p className="line-clamp-2 text-sm leading-5 text-[var(--muted-strong)]">{path || intention || "No goal written"}</p>
+    </section>
+  );
+}
+
+function ActionBar({
+  mode,
+  busy,
+  canStartIdleFocus,
+  onPause,
+  onFinish,
+  onResume,
+  onDiscard,
+}: {
+  mode: MenubarMode;
+  busy: boolean;
+  canStartIdleFocus: boolean;
+  onPause: () => void;
+  onFinish: () => void;
+  onResume: () => void;
+  onDiscard: () => void;
+}) {
+  const secondarySlots = (slots: React.ReactNode[]) => (
+    <div className="grid grid-cols-2 gap-2">
+      {slots.map((slot, index) => (
+        <div key={index} className="h-10">
+          {slot}
+        </div>
+      ))}
+      {Array.from({ length: Math.max(0, 2 - slots.length) }).map((_, index) => (
+        <div key={`empty-action-${index}`} aria-hidden="true" className="h-10" />
+      ))}
+    </div>
+  );
+
+  if (mode === "running") {
+    return (
+      <footer className="grid shrink-0 content-start gap-2 border-t border-[var(--border-subtle)] pt-3" style={{ height: SHELL_LAYOUT.actionBarHeight }}>
+        <PrimaryButton disabled={busy} onClick={onFinish}>Finish</PrimaryButton>
+        {secondarySlots([<SecondaryButton key="pause" disabled={busy} onClick={onPause}>Pause</SecondaryButton>])}
+      </footer>
+    );
+  }
+
+  if (mode === "paused") {
+    return (
+      <footer className="grid shrink-0 content-start gap-2 border-t border-[var(--border-subtle)] pt-3" style={{ height: SHELL_LAYOUT.actionBarHeight }}>
+        <PrimaryButton disabled={busy} onClick={onResume}>Resume</PrimaryButton>
+        {secondarySlots([
+          <SecondaryButton key="finish" disabled={busy} onClick={onFinish}>Finish</SecondaryButton>,
+          <SecondaryButton key="discard" disabled={busy} onClick={onDiscard}>Discard</SecondaryButton>,
+        ])}
+      </footer>
+    );
+  }
+
+  if (mode === "finishing") {
+    return (
+      <footer className="grid shrink-0 content-start gap-2 border-t border-[var(--border-subtle)] pt-3" style={{ height: SHELL_LAYOUT.actionBarHeight }}>
+        <PrimaryButton type="submit" form={MENUBAR_FORMS.finish} name="status" value="completed" disabled={busy}>Save completed</PrimaryButton>
+        {secondarySlots([
+          <SecondaryButton key="partial" type="submit" form={MENUBAR_FORMS.finish} name="status" value="partial" disabled={busy}>Save partial</SecondaryButton>,
+        ])}
+      </footer>
+    );
+  }
+
+  return (
+    <footer className="grid shrink-0 content-start gap-2 border-t border-[var(--border-subtle)] pt-3" style={{ height: SHELL_LAYOUT.actionBarHeight }}>
+      <PrimaryButton type="submit" form={MENUBAR_FORMS.idle} disabled={busy || !canStartIdleFocus}>Start Focus</PrimaryButton>
+      {secondarySlots([<OpenDashboardButton key="dashboard" />])}
+    </footer>
   );
 }
 
@@ -365,7 +524,7 @@ export function MenubarApp() {
   } = useAppStore();
   const [now, setNow] = useState(() => Date.now());
   const [action, setAction] = useState<ActionState>({ busy: false, message: null });
-  const panelRef = useRef<HTMLElement | null>(null);
+  const [canStartIdleFocus, setCanStartIdleFocus] = useState(false);
   const lastTrayTitleRef = useRef<string | null>(null);
   const lastCompletionSoundSessionRef = useRef<string | null>(null);
 
@@ -397,40 +556,9 @@ export function MenubarApp() {
   const activeSession = sessions.find((session) => ["running", "paused", "finishing"].includes(session.status));
   const mode = menubarMode(activeSession);
   const remainingSeconds = activeSession ? computeRemainingSeconds(activeSession, pauses, now) : settings.defaultFocusSeconds;
+  const elapsedSeconds = activeSession ? computeElapsedSeconds(activeSession, pauses, now) : 0;
   const header = statusHeader(activeSession, remainingSeconds);
   const trayTitle = menubarStatusTitle(activeSession, remainingSeconds);
-
-  useEffect(() => {
-    if (!("__TAURI_INTERNALS__" in window) || !panelRef.current) return;
-
-    let animationFrame = 0;
-    let lastHeight = 0;
-    const panel = panelRef.current;
-
-    const resizeWindow = () => {
-      window.cancelAnimationFrame(animationFrame);
-      animationFrame = window.requestAnimationFrame(() => {
-        const nextHeight = targetWindowHeight(mode, panel.scrollHeight);
-        if (Math.abs(nextHeight - lastHeight) < 1) return;
-
-        lastHeight = nextHeight;
-        void import("@tauri-apps/api/window")
-          .then(({ LogicalSize, getCurrentWindow }) => getCurrentWindow().setSize(new LogicalSize(MENUBAR_WINDOW_WIDTH, nextHeight)))
-          .catch(() => {
-            // Browser preview and older shells should keep rendering even if the Tauri window API is unavailable.
-          });
-      });
-    };
-
-    const observer = new ResizeObserver(resizeWindow);
-    observer.observe(panel);
-    resizeWindow();
-
-    return () => {
-      window.cancelAnimationFrame(animationFrame);
-      observer.disconnect();
-    };
-  }, [mode, ready, loading, action.message]);
 
   useEffect(() => {
     if (!isTauriRuntime() || lastTrayTitleRef.current === trayTitle) return;
@@ -463,9 +591,15 @@ export function MenubarApp() {
   const busy = action.busy || loading;
 
   return (
-    <main className="w-[380px] bg-[var(--surface)] text-[var(--foreground)]">
-      <section ref={panelRef} className="grid max-h-screen w-full gap-4 overflow-y-auto rounded-[20px] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[0_18px_45px_rgba(0,0,0,0.14)]">
-        <header className="flex items-center justify-between gap-3">
+    <main
+      className="bg-[var(--surface)] text-[var(--foreground)]"
+      style={{ width: MENUBAR_WINDOW.width, height: MENUBAR_WINDOW.height }}
+    >
+      <section className="grid h-full w-full grid-rows-[auto_auto_minmax(0,1fr)_auto] overflow-hidden rounded-[20px] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[0_18px_45px_rgba(0,0,0,0.14)]">
+        <header
+          className="flex shrink-0 items-center justify-between gap-3"
+          style={{ height: SHELL_LAYOUT.headerHeight }}
+        >
           <div className="flex min-w-0 items-center gap-2">
             <span className="text-lg" aria-hidden="true">{header.icon}</span>
             <p className="min-w-0 truncate text-[15px] font-semibold tracking-tight">{header.text}</p>
@@ -480,51 +614,75 @@ export function MenubarApp() {
           </button>
         </header>
 
-        {!ready && loading ? <p className="rounded-xl bg-[var(--surface-soft)] px-3 py-2 text-sm text-[var(--muted)]">Loading…</p> : null}
-        {(error || action.message) ? (
-          <p className="rounded-xl border border-[var(--danger-border)] bg-[var(--danger-bg)] px-3 py-2 text-sm text-[var(--danger-text)]">
-            {action.message ?? error}
-          </p>
-        ) : null}
-
-        {activeSession?.status === "running" ? (
-          <RunningState
+        <div className="shrink-0" style={{ height: SHELL_LAYOUT.capsuleHeight }}>
+          <FocusCapsule
+            mode={mode}
             session={activeSession}
             tasks={tasks}
-            busy={busy}
-            onPause={() => void runAction(pauseSession, "Failed to pause session")}
-            onFinish={() => void runAction(requestFinish, "Failed to finish session")}
-            onInterruption={(text) => createInterruption(text)}
-          />
-        ) : activeSession?.status === "paused" ? (
-          <PausedState
-            session={activeSession}
-            tasks={tasks}
-            busy={busy}
-            onResume={() => void runAction(resumeSession, "Failed to resume session")}
-            onFinish={() => void runAction(requestFinish, "Failed to finish session")}
-            onDiscard={() => void runAction(discardSession, "Failed to discard session")}
-            onInterruption={(text) => createInterruption(text)}
-          />
-        ) : activeSession?.status === "finishing" ? (
-          <FinishForm
-            session={activeSession}
-            tasks={tasks}
-            busy={busy}
-            onSave={(input) => runAction(() => saveFinish(input), "Failed to save session")}
-          />
-        ) : (
-          <IdleStartForm
-            tasks={tasks}
+            remainingSeconds={remainingSeconds}
             defaultFocusSeconds={settings.defaultFocusSeconds}
-            busy={busy}
-            onStart={(taskId, intention, plannedSeconds) => runAction(() => startFocus(taskId, intention, plannedSeconds), "Failed to start focus")}
+            elapsedSeconds={elapsedSeconds}
           />
-        )}
+        </div>
 
-        <footer className="border-t border-[var(--border-subtle)] pt-1">
-          <OpenDashboardButton />
-        </footer>
+        <section className="min-h-0 overflow-y-auto py-4">
+          <div className="grid gap-4">
+            {!ready && loading ? <p className="rounded-xl bg-[var(--surface-soft)] px-3 py-2 text-sm text-[var(--muted)]">Loading…</p> : null}
+            {(error || action.message) ? (
+              <p className="rounded-xl border border-[var(--danger-border)] bg-[var(--danger-bg)] px-3 py-2 text-sm text-[var(--danger-text)]">
+                {action.message ?? error}
+              </p>
+            ) : null}
+
+            {activeSession?.status === "running" ? (
+              <RunningStage
+                session={activeSession}
+                tasks={tasks}
+                busy={busy}
+                onInterruption={(text) => createInterruption(text)}
+              />
+            ) : activeSession?.status === "paused" ? (
+              <PausedStage
+                session={activeSession}
+                tasks={tasks}
+                busy={busy}
+                onInterruption={(text) => createInterruption(text)}
+              />
+            ) : activeSession?.status === "finishing" ? (
+              <FinishForm
+                session={activeSession}
+                tasks={tasks}
+                onSave={(input) => runAction(async () => {
+                  await saveFinish(input);
+                  setCanStartIdleFocus(false);
+                }, "Failed to save session")}
+              />
+            ) : (
+              <IdleStartForm
+                tasks={tasks}
+                defaultFocusSeconds={settings.defaultFocusSeconds}
+                onCanStartChange={setCanStartIdleFocus}
+                onStart={(taskId, intention, plannedSeconds) => runAction(async () => {
+                  await startFocus(taskId, intention, plannedSeconds);
+                  setCanStartIdleFocus(false);
+                }, "Failed to start focus")}
+              />
+            )}
+          </div>
+        </section>
+
+        <ActionBar
+          mode={mode}
+          busy={busy}
+          canStartIdleFocus={canStartIdleFocus}
+          onPause={() => void runAction(pauseSession, "Failed to pause session")}
+          onFinish={() => void runAction(requestFinish, "Failed to finish session")}
+          onResume={() => void runAction(resumeSession, "Failed to resume session")}
+          onDiscard={() => void runAction(async () => {
+            await discardSession();
+            setCanStartIdleFocus(false);
+          }, "Failed to discard session")}
+        />
       </section>
     </main>
   );
