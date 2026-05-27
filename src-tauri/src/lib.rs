@@ -175,6 +175,57 @@ fn dashboard_url() -> WebviewUrl {
     }
 }
 
+fn external_dashboard_url() -> Option<&'static str> {
+    if tauri::is_dev() {
+        Some("http://localhost:3000/")
+    } else {
+        None
+    }
+}
+
+fn open_url_in_chrome(url: &str) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        let chrome_status = std::process::Command::new("open")
+            .args(["-a", "Google Chrome", url])
+            .status()
+            .map_err(|error| error.to_string())?;
+
+        if chrome_status.success() {
+            return Ok(());
+        }
+
+        let fallback_status = std::process::Command::new("open")
+            .arg(url)
+            .status()
+            .map_err(|error| error.to_string())?;
+
+        if fallback_status.success() {
+            Ok(())
+        } else {
+            Err("Failed to open dashboard URL".to_string())
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(["/C", "start", "chrome", url])
+            .spawn()
+            .map(|_| ())
+            .map_err(|error| error.to_string())
+    }
+
+    #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(url)
+            .spawn()
+            .map(|_| ())
+            .map_err(|error| error.to_string())
+    }
+}
+
 fn open_dashboard_window(app: &AppHandle) {
     if let Some(window) = app.get_webview_window(DASHBOARD_WINDOW_LABEL) {
         let _ = window.unminimize();
@@ -191,6 +242,16 @@ fn open_dashboard_window(app: &AppHandle) {
         .resizable(true)
         .focused(true)
         .build();
+}
+
+#[tauri::command]
+fn open_dashboard_in_browser(app: AppHandle) -> Result<(), String> {
+    if let Some(url) = external_dashboard_url() {
+        return open_url_in_chrome(url);
+    }
+
+    open_dashboard_window(&app);
+    Ok(())
 }
 
 #[tauri::command]
@@ -228,6 +289,7 @@ fn set_menubar_status(app: AppHandle, title: String) -> Result<(), String> {
 pub fn run() {
     let app = tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
+            open_dashboard_in_browser,
             play_focus_complete_sound,
             set_menubar_status
         ])

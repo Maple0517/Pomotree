@@ -26,12 +26,15 @@
         "fullscreen": false,
         "center": true,
         "decorations": false,
-        "backgroundThrottling": "disabled"
+        "backgroundThrottling": "disabled",
+        "transparent": true,
+        "shadow": false
       }
     ],
     "security": {
       "csp": null
-    }
+    },
+    "macOSPrivateApi": true
   },
   "bundle": {
     "active": true,

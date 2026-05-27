@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { getTaskPathIds } from "@/lib/services/taskSelectors";
 import { useAppStore } from "@/lib/store/useAppStore";
@@ -23,7 +22,7 @@ const MENUBAR_WINDOW = {
 
 const SHELL_LAYOUT = {
   headerHeight: 44,
-  actionBarHeight: 116,
+  actionBarHeight: 148,
 } as const;
 
 const MENUBAR_FORMS = {
@@ -108,14 +107,24 @@ function SecondaryButton({ children, disabled, form, name, onClick, type = "butt
 }
 
 function OpenDashboardButton() {
+  const openDashboard = () => {
+    if (isTauriRuntime()) {
+      invokeTauriCommand("open_dashboard_in_browser");
+      return;
+    }
+
+    window.open("/", "_blank", "noopener,noreferrer");
+  };
+
   return (
-    <Link
-      href="/"
-      className="flex h-10 items-center justify-between rounded-xl px-1 text-sm font-medium text-[var(--muted-strong)] hover:text-[var(--foreground)]"
+    <button
+      type="button"
+      onClick={openDashboard}
+      className="flex h-8 w-full items-center justify-between rounded-xl px-1 text-sm font-medium text-[var(--muted-strong)] hover:text-[var(--foreground)]"
     >
       <span>Open Dashboard</span>
       <span aria-hidden="true">↗</span>
-    </Link>
+    </button>
   );
 }
 
@@ -409,6 +418,7 @@ function ActionBar({
       <footer className="grid shrink-0 content-start gap-2 border-t border-[var(--border-subtle)] pt-3" style={{ height: SHELL_LAYOUT.actionBarHeight }}>
         <PrimaryButton disabled={busy} onClick={onFinish}>Finish</PrimaryButton>
         {secondarySlots([<SecondaryButton key="pause" disabled={busy} onClick={onPause}>Pause</SecondaryButton>])}
+        <OpenDashboardButton />
       </footer>
     );
   }
@@ -421,6 +431,7 @@ function ActionBar({
           <SecondaryButton key="finish" disabled={busy} onClick={onFinish}>Finish</SecondaryButton>,
           <SecondaryButton key="discard" disabled={busy} onClick={onDiscard}>Discard</SecondaryButton>,
         ])}
+        <OpenDashboardButton />
       </footer>
     );
   }
@@ -432,6 +443,7 @@ function ActionBar({
         {secondarySlots([
           <SecondaryButton key="partial" type="submit" form={MENUBAR_FORMS.finish} name="status" value="partial" disabled={busy}>Save partial</SecondaryButton>,
         ])}
+        <OpenDashboardButton />
       </footer>
     );
   }
@@ -439,7 +451,8 @@ function ActionBar({
   return (
     <footer className="grid shrink-0 content-start gap-2 border-t border-[var(--border-subtle)] pt-3" style={{ height: SHELL_LAYOUT.actionBarHeight }}>
       <PrimaryButton type="submit" form={MENUBAR_FORMS.idle} disabled={busy || !canStartIdleFocus}>Start Focus</PrimaryButton>
-      {secondarySlots([<OpenDashboardButton key="dashboard" />])}
+      {secondarySlots([])}
+      <OpenDashboardButton />
     </footer>
   );
 }
@@ -532,7 +545,7 @@ export function MenubarApp() {
 
   return (
     <main
-      className="bg-[var(--surface)] text-[var(--foreground)]"
+      className="bg-transparent text-[var(--foreground)]"
       style={{ width: MENUBAR_WINDOW.width, height: MENUBAR_WINDOW.height }}
     >
       <section className="grid h-full w-full grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-[20px] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[0_18px_45px_rgba(0,0,0,0.14)]">
