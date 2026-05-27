@@ -358,7 +358,7 @@ export function MenubarApp() {
   const [now, setNow] = useState(() => Date.now());
   const [action, setAction] = useState<ActionState>({ busy: false, message: null });
   const panelRef = useRef<HTMLElement | null>(null);
-  const lastMenubarStatusRef = useRef<string | null>(null);
+  const lastTrayTitleRef = useRef<string | null>(null);
 
   useEffect(() => {
     void hydrate();
@@ -389,7 +389,7 @@ export function MenubarApp() {
   const mode = menubarMode(activeSession);
   const remainingSeconds = activeSession ? computeRemainingSeconds(activeSession, pauses, now) : settings.defaultFocusSeconds;
   const header = statusHeader(activeSession, remainingSeconds);
-  const menubarStatus = menubarStatusTitle(activeSession, remainingSeconds);
+  const trayTitle = menubarStatusTitle(activeSession, remainingSeconds);
 
   useEffect(() => {
     if (!("__TAURI_INTERNALS__" in window) || !panelRef.current) return;
@@ -424,15 +424,13 @@ export function MenubarApp() {
   }, [mode, ready, loading, action.message]);
 
   useEffect(() => {
-    if (!isTauriRuntime() || lastMenubarStatusRef.current === menubarStatus) return;
+    if (!isTauriRuntime() || lastTrayTitleRef.current === trayTitle) return;
 
-    lastMenubarStatusRef.current = menubarStatus;
+    lastTrayTitleRef.current = trayTitle;
     void import("@tauri-apps/api/core")
-      .then(({ invoke }) => invoke("set_menubar_status", { title: menubarStatus }))
-      .catch(() => {
-        lastMenubarStatusRef.current = null;
-      });
-  }, [menubarStatus]);
+      .then(({ invoke }) => invoke("set_menubar_status", { title: trayTitle }))
+      .catch(() => {});
+  }, [trayTitle]);
 
   useEffect(() => {
     if (activeSession?.status === "running" && remainingSeconds <= 0) {
