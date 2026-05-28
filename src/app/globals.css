@@ -137,6 +137,11 @@ body.menubar-popover-body {
   overflow: hidden;
 }
 
+html.menubar-popover-root.menubar-tauri-root,
+body.menubar-popover-body.menubar-tauri-body {
+  background: transparent;
+}
+
 button,
 input,
 select,

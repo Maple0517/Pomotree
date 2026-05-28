@@ -556,12 +556,17 @@ export function MenubarApp() {
   }, [settings.theme]);
 
   useEffect(() => {
+    const tauriRuntime = isTauriRuntime();
     document.documentElement.classList.add("menubar-popover-root");
     document.body.classList.add("menubar-popover-body");
+    if (tauriRuntime) {
+      document.documentElement.classList.add("menubar-tauri-root");
+      document.body.classList.add("menubar-tauri-body");
+    }
 
     return () => {
-      document.documentElement.classList.remove("menubar-popover-root");
-      document.body.classList.remove("menubar-popover-body");
+      document.documentElement.classList.remove("menubar-popover-root", "menubar-tauri-root");
+      document.body.classList.remove("menubar-popover-body", "menubar-tauri-body");
     };
   }, []);
 
@@ -603,7 +608,7 @@ export function MenubarApp() {
 
   return (
     <main
-      className="bg-[#f3f2ee] text-[var(--menubar-text)]"
+      className="bg-transparent text-[var(--menubar-text)]"
       style={{ width: MENUBAR_WINDOW.width, height: MENUBAR_WINDOW.height }}
     >
       <section className="menubar-shell flex h-full w-full flex-col overflow-hidden rounded-[19px] border border-[var(--menubar-border)] [background:var(--menubar-surface)] shadow-[0_20px_60px_rgba(17,19,21,0.14)]">
