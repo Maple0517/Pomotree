@@ -44,6 +44,7 @@ export type SettingsUpdate = Partial<
     | "defaultBreakSeconds"
     | "enableNotifications"
     | "theme"
+    | "language"
     | "autoStartBreak"
     | "autoStartNextFocus"
   >

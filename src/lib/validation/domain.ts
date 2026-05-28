@@ -104,6 +104,9 @@ export function validateUserSettingsRecord(settings: UserSettings) {
   if (!["light", "dark", "system"].includes(settings.theme)) {
     throw new Error("Theme must be light, dark, or system");
   }
+  if (settings.language !== undefined && !["en", "zh"].includes(settings.language)) {
+    throw new Error("Language must be en or zh");
+  }
   if (!hasValidDate(settings.createdAt) || !hasValidDate(settings.updatedAt)) {
     throw new Error("User settings timestamps must be valid ISO strings");
   }

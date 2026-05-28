@@ -9,6 +9,7 @@ export function createDefaultSettings(): UserSettings {
     defaultBreakSeconds: 5 * 60,
     enableNotifications: false,
     theme: "system",
+    language: "en",
     autoStartBreak: false,
     autoStartNextFocus: false,
     createdAt: now,

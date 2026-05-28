@@ -73,6 +73,7 @@ export interface UserSettings {
   defaultBreakSeconds: number;
   enableNotifications: boolean;
   theme: "light" | "dark" | "system";
+  language?: "en" | "zh";
   autoStartBreak: boolean;
   autoStartNextFocus: boolean;
   createdAt: ISODateTimeString;

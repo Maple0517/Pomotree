@@ -104,7 +104,7 @@ body.menubar-popover-body {
 }
 
 .menubar-shell select option {
-  background: #11161a;
+  background: #ffffff;
   color: var(--menubar-text);
 }
 

@@ -62,6 +62,7 @@ function makeSettings(overrides: Partial<UserSettings> = {}): UserSettings {
     defaultBreakSeconds: 300,
     enableNotifications: false,
     theme: "system",
+    language: "en",
     autoStartBreak: false,
     autoStartNextFocus: false,
     createdAt: now,
@@ -99,5 +100,7 @@ describe("domain validators", () => {
   it("enforces settings bounds", () => {
     expect(() => validateUserSettingsRecord(makeSettings({ defaultFocusSeconds: 0 }))).toThrow("Default focus duration");
     expect(() => validateUserSettingsRecord(makeSettings({ theme: "dark" }))).not.toThrow();
+    expect(() => validateUserSettingsRecord(makeSettings({ language: "zh" }))).not.toThrow();
+    expect(() => validateUserSettingsRecord(makeSettings({ language: "fr" as never }))).toThrow("Language");
   });
 });
