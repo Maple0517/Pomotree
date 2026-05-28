@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Check, CheckCircle2, ChevronDown, Circle, ExternalLink, Globe2, Lightbulb, Pause, Pencil, Play, Settings, Square } from "lucide-react";
+import { ArrowLeft, Check, CheckCircle2, ChevronDown, Circle, ExternalLink, Globe2, Lightbulb, Monitor, Moon, Pause, Pencil, Play, Settings, Square, Sun } from "lucide-react";
 import { getTaskPathIds } from "@/lib/services/taskSelectors";
 import { useAppStore } from "@/lib/store/useAppStore";
 import { computeRemainingSeconds, formatClock } from "@/lib/utils/timer";
@@ -9,6 +9,7 @@ import type { FocusSession, Task, UserSettings } from "@/types/domain";
 
 type AppLanguage = NonNullable<UserSettings["language"]>;
 type DurationPreset = 25 | 50 | "custom";
+type ThemeSetting = UserSettings["theme"];
 type MenubarMode = "idle" | "running" | "paused" | "finishing";
 type FinishStatus = "completed" | "partial";
 type MenubarView = "focus" | "settings";
@@ -35,6 +36,11 @@ type MenubarCopy = {
   intent: string;
   language: string;
   languageHelp: string;
+  light: string;
+  dark: string;
+  system: string;
+  theme: string;
+  themeHelp: string;
   noActiveSession: string;
   noGoal: string;
   pause: string;
@@ -74,7 +80,12 @@ const TEXT: Record<AppLanguage, MenubarCopy> = {
     greatWork: "Great work! You stayed focused.",
     intent: "Intent",
     language: "Language",
-    languageHelp: "Choose the language used in this menubar window.",
+    languageHelp: "Choose the language used across Pomotree.",
+    light: "Light",
+    dark: "Dark",
+    system: "System",
+    theme: "Appearance",
+    themeHelp: "Choose light, dark, or follow your system setting.",
     noActiveSession: "No active session",
     noGoal: "No goal written",
     pause: "Pause",
@@ -112,7 +123,12 @@ const TEXT: Record<AppLanguage, MenubarCopy> = {
     greatWork: "做得好！你保持了专注。",
     intent: "意图",
     language: "语言",
-    languageHelp: "选择菜单栏窗口使用的显示语言。",
+    languageHelp: "选择 Pomotree 的显示语言。",
+    light: "日间",
+    dark: "夜间",
+    system: "跟随系统",
+    theme: "外观",
+    themeHelp: "选择日间、夜间，或跟随系统设置。",
     noActiveSession: "当前没有专注",
     noGoal: "未填写目标",
     pause: "暂停",
@@ -248,7 +264,7 @@ function SettingsButton({ copy, onClick }: { copy: MenubarCopy; onClick: () => v
       aria-label={copy.appSettings}
       title={copy.appSettings}
       onClick={onClick}
-      className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-full border border-[var(--menubar-border)] bg-white/70 text-[var(--menubar-text)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.65),0_8px_18px_rgba(17,19,21,0.08)]"
+      className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-full border border-[var(--menubar-border)] bg-[var(--menubar-control-bg)] text-[var(--menubar-text)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.65),0_8px_18px_rgba(17,19,21,0.08)]"
     >
       <Settings size={21} strokeWidth={2.2} />
     </button>
@@ -637,17 +653,22 @@ function MenubarHeader({ activeSession, copy, onSettings, remainingSeconds }: { 
   );
 }
 
-function SettingsPanel({ copy, language, settings, onBack, onChangeLanguage, onChangeFocusMinutes }: { copy: MenubarCopy; language: AppLanguage; settings: UserSettings; onBack: () => void; onChangeLanguage: (language: AppLanguage) => void; onChangeFocusMinutes: (minutes: number) => void }) {
+function SettingsPanel({ copy, language, settings, onBack, onChangeLanguage, onChangeFocusMinutes, onChangeTheme }: { copy: MenubarCopy; language: AppLanguage; settings: UserSettings; onBack: () => void; onChangeLanguage: (language: AppLanguage) => void; onChangeFocusMinutes: (minutes: number) => void; onChangeTheme: (theme: ThemeSetting) => void }) {
   const focusMinutes = Math.round(settings.defaultFocusSeconds / 60);
   const languageOptions: Array<{ label: string; value: AppLanguage }> = [
     { label: copy.english, value: "en" },
     { label: copy.zh, value: "zh" },
   ];
+  const themeOptions: Array<{ icon: React.ReactNode; label: string; value: ThemeSetting }> = [
+    { icon: <Sun size={17} />, label: copy.light, value: "light" },
+    { icon: <Moon size={17} />, label: copy.dark, value: "dark" },
+    { icon: <Monitor size={17} />, label: copy.system, value: "system" },
+  ];
 
   return (
     <div className="grid gap-5 px-5 pt-[22px]">
       <header className="flex items-center gap-3">
-        <button type="button" onClick={onBack} aria-label={copy.back} className="grid h-[42px] w-[42px] place-items-center rounded-full border border-[var(--menubar-border)] bg-white/70 text-[var(--menubar-text)]">
+        <button type="button" onClick={onBack} aria-label={copy.back} className="grid h-[42px] w-[42px] place-items-center rounded-full border border-[var(--menubar-border)] bg-[var(--menubar-control-bg)] text-[var(--menubar-text)]">
           <ArrowLeft size={21} />
         </button>
         <div>
@@ -672,8 +693,35 @@ function SettingsPanel({ copy, language, settings, onBack, onChangeLanguage, onC
                 key={option.value}
                 type="button"
                 onClick={() => onChangeLanguage(option.value)}
-                className={`menubar-button h-11 rounded-[10px] border text-[15px] font-bold ${selected ? "border-[#17191c] bg-[#17191c] text-white" : "border-[var(--menubar-border-strong)] bg-white/50 text-[var(--menubar-text)]"}`}
+                className={`menubar-button h-11 rounded-[10px] border text-[15px] font-bold ${selected ? "border-[var(--menubar-selected-bg)] bg-[var(--menubar-selected-bg)] text-[var(--menubar-selected-text)]" : "border-[var(--menubar-border-strong)] bg-[var(--menubar-control-bg)] text-[var(--menubar-text)]"}`}
               >
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+
+      <section className="grid gap-3 rounded-[16px] border border-[var(--menubar-border)] bg-[var(--menubar-soft)] p-4">
+        <div className="flex items-start gap-3">
+          <Sun className="mt-0.5 shrink-0 text-[var(--menubar-muted-strong)]" size={20} />
+          <div>
+            <h2 className="text-[16px] font-bold text-[var(--menubar-text)]">{copy.theme}</h2>
+            <p className="mt-1 text-[13px] font-medium leading-5 text-[var(--menubar-muted-strong)]">{copy.themeHelp}</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          {themeOptions.map((option) => {
+            const selected = settings.theme === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => onChangeTheme(option.value)}
+                className={`menubar-button inline-flex h-11 items-center justify-center gap-1.5 rounded-[10px] border text-[13px] font-bold ${selected ? "border-[var(--menubar-selected-bg)] bg-[var(--menubar-selected-bg)] text-[var(--menubar-selected-text)]" : "border-[var(--menubar-border-strong)] bg-[var(--menubar-control-bg)] text-[var(--menubar-text)]"}`}
+              >
+                {option.icon}
                 {option.label}
               </button>
             );
@@ -691,7 +739,7 @@ function SettingsPanel({ copy, language, settings, onBack, onChangeLanguage, onC
                 key={minutes}
                 type="button"
                 onClick={() => onChangeFocusMinutes(minutes)}
-                className={`menubar-button h-11 rounded-[10px] border text-[15px] font-bold ${selected ? "border-[#17191c] bg-[#17191c] text-white" : "border-[var(--menubar-border-strong)] bg-white/50 text-[var(--menubar-text)]"}`}
+                className={`menubar-button h-11 rounded-[10px] border text-[15px] font-bold ${selected ? "border-[var(--menubar-selected-bg)] bg-[var(--menubar-selected-bg)] text-[var(--menubar-selected-text)]" : "border-[var(--menubar-border-strong)] bg-[var(--menubar-control-bg)] text-[var(--menubar-text)]"}`}
               >
                 {minutes} min
               </button>
@@ -743,8 +791,14 @@ export function MenubarApp() {
 
   useEffect(() => {
     const root = document.documentElement;
-    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    root.dataset.theme = settings.theme === "system" ? (prefersDark ? "dark" : "light") : settings.theme;
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const applyTheme = () => {
+      root.dataset.theme = settings.theme === "system" ? (media.matches ? "dark" : "light") : settings.theme;
+    };
+
+    applyTheme();
+    media.addEventListener("change", applyTheme);
+    return () => media.removeEventListener("change", applyTheme);
   }, [settings.theme]);
 
   useEffect(() => {
@@ -810,6 +864,7 @@ export function MenubarApp() {
               onBack={() => setView("focus")}
               onChangeLanguage={(nextLanguage) => void runAction(() => updateSettings({ language: nextLanguage }), "Failed to update language")}
               onChangeFocusMinutes={(minutes) => void runAction(() => updateSettings({ defaultFocusSeconds: minutes * 60 }), "Failed to update duration")}
+              onChangeTheme={(theme) => void runAction(() => updateSettings({ theme }), "Failed to update theme")}
             />
           ) : (
             <>

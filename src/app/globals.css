@@ -86,7 +86,25 @@ html.menubar-popover-root {
   --menubar-placeholder: rgba(23, 25, 28, 0.32);
   --menubar-border: rgba(17, 19, 21, 0.09);
   --menubar-border-strong: rgba(17, 19, 21, 0.14);
+  --menubar-selected-bg: #17191c;
+  --menubar-selected-text: #ffffff;
+  --menubar-control-bg: rgba(255, 255, 255, 0.5);
   background: transparent !important;
+}
+
+html.menubar-popover-root[data-theme="dark"] {
+  --menubar-bg: #111111;
+  --menubar-surface: linear-gradient(145deg, #242424 0%, #1b1b1b 58%, #121212 100%);
+  --menubar-soft: rgba(247, 246, 242, 0.07);
+  --menubar-text: #f7f6f2;
+  --menubar-muted: rgba(247, 246, 242, 0.58);
+  --menubar-muted-strong: rgba(247, 246, 242, 0.74);
+  --menubar-placeholder: rgba(247, 246, 242, 0.38);
+  --menubar-border: rgba(247, 246, 242, 0.12);
+  --menubar-border-strong: rgba(247, 246, 242, 0.2);
+  --menubar-selected-bg: #f7f6f2;
+  --menubar-selected-text: #111111;
+  --menubar-control-bg: rgba(247, 246, 242, 0.08);
 }
 
 body.menubar-popover-body {
@@ -97,6 +115,10 @@ body.menubar-popover-body {
   color-scheme: light;
 }
 
+html.menubar-popover-root[data-theme="dark"] .menubar-shell {
+  color-scheme: dark;
+}
+
 .menubar-shell input,
 .menubar-shell textarea,
 .menubar-shell select {
@@ -104,7 +126,7 @@ body.menubar-popover-body {
 }
 
 .menubar-shell select option {
-  background: #ffffff;
+  background: var(--surface);
   color: var(--menubar-text);
 }
 

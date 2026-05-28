@@ -5,6 +5,255 @@ import { getActiveTaskRows, getArchivedBranchRoots, getAutoExpandedTaskIds, getT
 import { useAppStore } from "@/lib/store/useAppStore";
 import { computeRemainingSeconds, formatClock } from "@/lib/utils/timer";
 import { formatDuration, getTaskStats, getTodayStats } from "@/lib/services/stats";
+import type { UserSettings } from "@/types/domain";
+
+type AppLanguage = NonNullable<UserSettings["language"]>;
+type DashboardCopy = {
+  add: string;
+  addInterruption: string;
+  addSubtask: string;
+  addTaskPlaceholder: string;
+  archive: string;
+  archivedTasks: string;
+  actualAttribution: string;
+  browserNotifications: string;
+  cancel: string;
+  clickTaskHint: string;
+  completed: string;
+  convertToTask: string;
+  correctAttribution: string;
+  currentArchivedAttribution: string;
+  currentFocus: string;
+  dark: string;
+  defaultFocusDuration: string;
+  discard: string;
+  dismiss: string;
+  done: string;
+  edit: string;
+  exportJson: string;
+  focus: string;
+  focusMinutes: string;
+  focusTime: string;
+  finishSession: string;
+  headerSubtitle: string;
+  importJson: string;
+  importPlaceholder: string;
+  intentionLabel: string;
+  intentionPlaceholder: string;
+  interruptions: string;
+  language: string;
+  light: string;
+  loading: string;
+  localFirst: string;
+  markAttributedDone: string;
+  markDone: string;
+  noArchivedTasks: string;
+  noCompletedSessions: string;
+  noOpenInterruptions: string;
+  noTasksYet: string;
+  noTaskSelected: string;
+  notReady: string;
+  notificationPermission: string;
+  notificationPrimary: string;
+  openInterruptionPlaceholder: string;
+  partial: string;
+  planned: string;
+  recentSessions: string;
+  root: string;
+  reopen: string;
+  restore: string;
+  restoreData: string;
+  resume: string;
+  save: string;
+  saveCompleted: string;
+  savePartial: string;
+  saveTask: string;
+  settings: string;
+  state: string;
+  system: string;
+  task: string;
+  taskTree: string;
+  theme: string;
+  today: string;
+  toggleTaskHint: string;
+  summaryPlaceholder: string;
+  pause: string;
+  finish: string;
+  idle: string;
+  unknownTask: string;
+  completedPomodoros: string;
+  collapseArchived: string;
+  expandArchived: string;
+  focusCompleteNotification: string;
+  focusCompleteBody: string;
+  session: string;
+  unassigned: string;
+};
+
+const DASHBOARD_TEXT: Record<AppLanguage, DashboardCopy> = {
+  en: {
+    add: "Add",
+    addInterruption: "Add interruption",
+    addSubtask: "Add subtask",
+    addTaskPlaceholder: "Add a task or path, e.g. Project / Subtask",
+    archive: "Archive",
+    archivedTasks: "Archived Tasks",
+    actualAttribution: "Actual attribution",
+    browserNotifications: "Browser notifications",
+    cancel: "Cancel",
+    clickTaskHint: "Click task to select",
+    completed: "Completed",
+    convertToTask: "Convert to task",
+    correctAttribution: "Correct attribution",
+    currentArchivedAttribution: "Current archived attribution",
+    currentFocus: "Current focus",
+    dark: "Dark",
+    defaultFocusDuration: "Default focus duration",
+    discard: "Discard",
+    dismiss: "Dismiss",
+    done: "Done",
+    edit: "Edit",
+    exportJson: "Export JSON",
+    focus: "Focus",
+    focusMinutes: "Focus minutes",
+    focusTime: "Focus time",
+    finishSession: "Finish this focus session",
+    headerSubtitle: "Focus tree, one session at a time",
+    importJson: "Import JSON",
+    importPlaceholder: "Paste a Pomotree export JSON object",
+    intentionLabel: "Intention without a task",
+    intentionPlaceholder: "e.g. Read and annotate the proposal",
+    interruptions: "Interruptions",
+    language: "Language",
+    light: "Light",
+    loading: "Loading…",
+    localFirst: "Local-first MVP",
+    markAttributedDone: "Mark attributed task done",
+    markDone: "Mark done",
+    noArchivedTasks: "No archived tasks.",
+    noCompletedSessions: "No completed focus sessions yet.",
+    noOpenInterruptions: "No open interruptions.",
+    noTasksYet: "No tasks yet. Create your first focus tree node.",
+    noTaskSelected: "No task selected",
+    notReady: "Not ready",
+    notificationPermission: "Notification permission",
+    notificationPrimary: "In-page completion panel remains primary.",
+    openInterruptionPlaceholder: "Capture an intention, a summary, or the next follow-up task...",
+    partial: "Partial",
+    planned: "Planned",
+    recentSessions: "Recent sessions",
+    root: "Root",
+    reopen: "Reopen",
+    restore: "Restore",
+    restoreData: "Restore data",
+    resume: "Resume",
+    save: "Save",
+    saveCompleted: "Save completed",
+    savePartial: "Save partial",
+    saveTask: "Save task",
+    settings: "Settings",
+    state: "State",
+    system: "System",
+    task: "Task",
+    taskTree: "Task tree",
+    theme: "Theme",
+    today: "Today",
+    pause: "Pause",
+    finish: "Finish",
+    idle: "Idle",
+    unknownTask: "Unknown task",
+    completedPomodoros: "Completed Pomodoros",
+    collapseArchived: "Collapse archived tasks",
+    expandArchived: "Expand archived tasks",
+    focusCompleteNotification: "Pomotree focus complete",
+    focusCompleteBody: "is ready to finish.",
+    session: "session",
+    toggleTaskHint: "Click chevron to expand/collapse",
+    summaryPlaceholder: "What did you actually complete? Summary is optional for MVP.",
+    unassigned: "Unassigned / intention",
+  },
+  zh: {
+    add: "添加",
+    addInterruption: "添加打断",
+    addSubtask: "添加子任务",
+    addTaskPlaceholder: "添加任务或路径，例如：项目 / 子任务",
+    archive: "归档",
+    archivedTasks: "已归档任务",
+    actualAttribution: "实际归属",
+    browserNotifications: "浏览器通知",
+    cancel: "取消",
+    clickTaskHint: "点击任务进行选择",
+    completed: "已完成",
+    convertToTask: "转为任务",
+    correctAttribution: "修正归属",
+    currentArchivedAttribution: "当前归档归属",
+    currentFocus: "当前专注",
+    dark: "夜间",
+    defaultFocusDuration: "默认专注时长",
+    discard: "丢弃",
+    dismiss: "忽略",
+    done: "完成",
+    edit: "编辑",
+    exportJson: "导出 JSON",
+    focus: "专注",
+    focusMinutes: "专注分钟数",
+    focusTime: "专注时长",
+    finishSession: "完成这次专注",
+    headerSubtitle: "专注树，一次推进一个番茄钟",
+    importJson: "导入 JSON",
+    importPlaceholder: "粘贴 Pomotree 导出的 JSON 对象",
+    intentionLabel: "不绑定任务的意图",
+    intentionPlaceholder: "例如：阅读并批注方案",
+    interruptions: "打断记录",
+    language: "语言",
+    light: "日间",
+    loading: "加载中…",
+    localFirst: "本地优先 MVP",
+    markAttributedDone: "标记归属任务为完成",
+    markDone: "标记完成",
+    noArchivedTasks: "暂无归档任务。",
+    noCompletedSessions: "还没有已完成的专注记录。",
+    noOpenInterruptions: "暂无未处理打断。",
+    noTasksYet: "暂无任务。创建你的第一个专注树节点。",
+    noTaskSelected: "未选择任务",
+    notReady: "未就绪",
+    notificationPermission: "通知权限",
+    notificationPrimary: "页面内完成面板仍是主要提醒。",
+    openInterruptionPlaceholder: "记录一个意图、总结，或下一步要处理的任务...",
+    partial: "部分完成",
+    planned: "计划",
+    recentSessions: "最近专注",
+    root: "根目录",
+    reopen: "重新打开",
+    restore: "恢复",
+    restoreData: "恢复数据",
+    resume: "继续",
+    save: "保存",
+    saveCompleted: "保存为完成",
+    savePartial: "保存为部分完成",
+    saveTask: "保存任务",
+    settings: "设置",
+    state: "状态",
+    system: "跟随系统",
+    task: "任务",
+    taskTree: "任务树",
+    theme: "外观",
+    today: "今天",
+    pause: "暂停",
+    finish: "完成",
+    idle: "空闲",
+    unknownTask: "未知任务",
+    completedPomodoros: "已完成番茄钟",
+    collapseArchived: "收起归档任务",
+    expandArchived: "展开归档任务",
+    focusCompleteNotification: "Pomotree 专注完成",
+    focusCompleteBody: "已准备完成。",
+    session: "专注记录",
+    toggleTaskHint: "点击箭头展开/收起",
+    summaryPlaceholder: "你实际完成了什么？MVP 阶段总结可选。",
+    unassigned: "未分配 / 仅意图",
+  },
+};
 
 export default function Home() {
   const {
@@ -62,6 +311,8 @@ export default function Home() {
   const [importText, setImportText] = useState("");
   const [showImport, setShowImport] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const language = settings.language ?? "en";
+  const copy = DASHBOARD_TEXT[language];
 
   useEffect(() => {
     void hydrate();
@@ -74,10 +325,19 @@ export default function Home() {
 
   useEffect(() => {
     const root = document.documentElement;
-    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    const resolvedTheme = settings.theme === "system" ? (prefersDark ? "dark" : "light") : settings.theme;
-    root.dataset.theme = resolvedTheme;
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const applyTheme = () => {
+      root.dataset.theme = settings.theme === "system" ? (media.matches ? "dark" : "light") : settings.theme;
+    };
+
+    applyTheme();
+    media.addEventListener("change", applyTheme);
+    return () => media.removeEventListener("change", applyTheme);
   }, [settings.theme]);
+
+  useEffect(() => {
+    document.documentElement.lang = language;
+  }, [language]);
 
   useEffect(() => {
     window.setTimeout(() => {
@@ -146,7 +406,7 @@ export default function Home() {
 
   const activeTaskTitle = activeSession?.intention
     ? activeSession.intention
-    : activeSession?.taskPathSnapshot ?? tasks.find((task) => task.id === effectiveTaskId)?.title ?? "No task selected";
+    : activeSession?.taskPathSnapshot ?? tasks.find((task) => task.id === effectiveTaskId)?.title ?? copy.noTaskSelected;
   const customPlannedSeconds = plannedMinutes.trim() ? Math.max(1, Number(plannedMinutes)) * 60 : undefined;
   const previewPlannedSeconds = customPlannedSeconds ?? settings.defaultFocusSeconds;
   const remainingSeconds = activeSession ? computeRemainingSeconds(activeSession, pauses, now) : previewPlannedSeconds;
@@ -155,15 +415,15 @@ export default function Home() {
     if (activeSession?.status === "running" && remainingSeconds <= 0) {
       const shouldNotify = settings.enableNotifications && notificationStatus === "granted" && lastNotifiedSessionIdRef.current !== activeSession.id;
       if (shouldNotify) {
-        new Notification("Pomotree focus complete", {
-          body: `${activeTaskTitle} is ready to finish.`,
+        new Notification(copy.focusCompleteNotification, {
+          body: `${activeTaskTitle} ${copy.focusCompleteBody}`,
           tag: activeSession.id,
         });
         lastNotifiedSessionIdRef.current = activeSession.id;
       }
       void expireRunningSession(activeSession.id);
     }
-  }, [activeSession, activeTaskTitle, expireRunningSession, notificationStatus, remainingSeconds, settings.enableNotifications]);
+  }, [activeSession, activeTaskTitle, copy.focusCompleteBody, copy.focusCompleteNotification, expireRunningSession, notificationStatus, remainingSeconds, settings.enableNotifications]);
   const todayStats = useMemo(() => getTodayStats(sessions, interruptions), [sessions, interruptions]);
   const taskStatsById = useMemo(() => {
     return new Map(tasks.map((task) => [task.id, getTaskStats(tasks, sessions, task.id)]));
@@ -258,10 +518,10 @@ export default function Home() {
         <header className="flex items-center justify-between border-b border-[var(--border)] pb-5">
           <div>
             <p className="text-sm font-medium tracking-[0.18em] text-[var(--muted)] uppercase">Pomotree</p>
-            <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Focus tree, one session at a time</h1>
+            <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">{copy.headerSubtitle}</h1>
           </div>
           <div className="rounded-full border border-[var(--border)] px-3 py-1 text-sm text-[var(--muted)]">
-            {loading ? "Loading…" : ready ? "Local-first MVP" : "Not ready"}
+            {loading ? copy.loading : ready ? copy.localFirst : copy.notReady}
           </div>
         </header>
 
@@ -277,8 +537,8 @@ export default function Home() {
             <section className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_1px_0_var(--shadow-line)]">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-sm font-medium text-[var(--muted)]">Current focus</p>
-                  <h2 className="mt-1 text-4xl font-semibold tracking-tight" aria-label={`Remaining time ${formatClock(remainingSeconds)}`}>{formatClock(remainingSeconds)}</h2>
+                  <p className="text-sm font-medium text-[var(--muted)]">{copy.currentFocus}</p>
+                  <h2 className="mt-1 text-4xl font-semibold tracking-tight" aria-label={`${copy.planned} ${formatClock(remainingSeconds)}`}>{formatClock(remainingSeconds)}</h2>
                 </div>
                 <div className="flex flex-wrap justify-end gap-2">
                   {!activeSession ? (
@@ -287,21 +547,21 @@ export default function Home() {
                       disabled={!canStartFocus}
                       onClick={() => void startFocus(effectiveTaskId ?? null, focusIntention, customPlannedSeconds).then(() => setFocusIntention(""))}
                     >
-                      Start focus
+                      {copy.focus}
                     </button>
                   ) : activeSession.status === "paused" ? (
                     <button
                       className="rounded-full bg-[var(--primary)] px-4 py-2 text-sm font-medium text-[var(--primary-foreground)]"
                       onClick={() => void resumeSession()}
                     >
-                      Resume
+                      {copy.resume}
                     </button>
                   ) : activeSession.status === "running" ? (
                     <button
                       className="rounded-full bg-[var(--primary)] px-4 py-2 text-sm font-medium text-[var(--primary-foreground)]"
                       onClick={() => void pauseSession()}
                     >
-                      Pause
+                      {copy.pause}
                     </button>
                   ) : null}
                   {activeSession && activeSession.status !== "finishing" ? (
@@ -309,7 +569,7 @@ export default function Home() {
                       className="rounded-full border border-[var(--border)] px-4 py-2 text-sm font-medium text-[var(--muted)]"
                       onClick={() => void requestFinish()}
                     >
-                      Finish
+                      {copy.finish}
                     </button>
                   ) : null}
                   {activeSession ? (
@@ -317,16 +577,16 @@ export default function Home() {
                       className="rounded-full border border-[var(--border)] px-4 py-2 text-sm font-medium text-[var(--muted)]"
                       onClick={() => void discardSession()}
                     >
-                      Discard
+                      {copy.discard}
                     </button>
                   ) : null}
                 </div>
               </div>
               <div className="mt-6 grid gap-3 sm:grid-cols-3">
                 {[
-                  ["Task", activeTaskTitle],
-                  ["State", activeSession?.status ?? "Idle"],
-                  ["Planned", `${(activeSession?.plannedSeconds ?? previewPlannedSeconds) / 60} min`],
+                  [copy.task, activeTaskTitle],
+                  [copy.state, activeSession?.status ?? copy.idle],
+                  [copy.planned, `${(activeSession?.plannedSeconds ?? previewPlannedSeconds) / 60} min`],
                 ].map(([label, value]) => (
                   <div key={label} className="rounded-2xl bg-[var(--surface-soft)] p-4">
                     <p className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--muted)]">{label}</p>
@@ -336,7 +596,7 @@ export default function Home() {
               </div>
               <div className="mt-4">
                 <label className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--muted)]" htmlFor="task-attribution">
-                  Actual attribution
+                  {copy.actualAttribution}
                 </label>
                 <select
                   id="task-attribution"
@@ -346,10 +606,10 @@ export default function Home() {
                 >
                   {activeSessionHasArchivedAttribution && activeSession?.taskId ? (
                     <option value={activeSession.taskId} disabled>
-                      {`Current archived attribution: ${activeSession.taskPathSnapshot ?? activeTask?.title ?? "Unknown task"}`}
+                      {`${copy.currentArchivedAttribution}: ${activeSession.taskPathSnapshot ?? activeTask?.title ?? copy.unknownTask}`}
                     </option>
                   ) : null}
-                  <option value="">Unassigned / intention</option>
+                  <option value="">{copy.unassigned}</option>
                   {activeTaskRows.map(({ task, depth }) => (
                     <option key={task.id} value={task.id}>
                       {`${"— ".repeat(depth)}${task.title}`}
@@ -361,19 +621,19 @@ export default function Home() {
                 <div className="mt-4 grid gap-4 md:grid-cols-[1fr_160px]">
                   <div>
                     <label className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--muted)]" htmlFor="focus-intention">
-                      Intention without a task
+                      {copy.intentionLabel}
                     </label>
                     <input
                       id="focus-intention"
                       value={focusIntention}
                       onChange={(event) => setFocusIntention(event.target.value)}
                       className="mt-2 w-full rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm outline-none placeholder:text-[var(--placeholder)]"
-                      placeholder="e.g. Read and annotate the proposal"
+                      placeholder={copy.intentionPlaceholder}
                     />
                   </div>
                   <div>
                     <label className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--muted)]" htmlFor="planned-minutes">
-                      Focus minutes
+                      {copy.focusMinutes}
                     </label>
                     <input
                       id="planned-minutes"
@@ -391,16 +651,16 @@ export default function Home() {
               ) : null}
               {activeSession?.status === "finishing" ? (
                 <div className="mt-5 rounded-2xl border border-[var(--warning-border)] bg-[var(--warning-bg)] p-4">
-                  <p className="text-sm font-semibold text-[var(--warning-text)]">Finish this focus session</p>
+                  <p className="text-sm font-semibold text-[var(--warning-text)]">{copy.finishSession}</p>
                   <textarea
                     value={summary}
                     onChange={(event) => setSummary(event.target.value)}
                     className="mt-3 min-h-24 w-full resize-none rounded-2xl border border-[var(--warning-border)] bg-[var(--surface)] p-3 text-sm outline-none placeholder:text-[var(--placeholder)]"
-                    placeholder="What did you actually complete? Summary is optional for MVP."
+                    placeholder={copy.summaryPlaceholder}
                   />
                   {canMarkSelectedTaskDone ? (
                     <label className="mt-3 flex items-center justify-between gap-4 rounded-2xl bg-[var(--surface)] px-3 py-2 text-sm text-[var(--warning-text)]">
-                      <span>Mark attributed task done</span>
+                      <span>{copy.markAttributedDone}</span>
                       <input
                         type="checkbox"
                         checked={markTaskDone}
@@ -414,13 +674,13 @@ export default function Home() {
                       className="rounded-full bg-[var(--primary)] px-4 py-2 text-sm font-medium text-[var(--primary-foreground)]"
                       onClick={() => void saveFinish({ status: "completed", summary, taskId: finishTaskId, markTaskDone }).then(() => { setSummary(""); setSelectedTaskId(undefined); setMarkTaskDone(false); })}
                     >
-                      Save completed
+                      {copy.saveCompleted}
                     </button>
                     <button
                       className="rounded-full border border-[var(--border)] px-4 py-2 text-sm font-medium"
                       onClick={() => void saveFinish({ status: "partial", summary, taskId: finishTaskId, markTaskDone }).then(() => { setSummary(""); setSelectedTaskId(undefined); setMarkTaskDone(false); })}
                     >
-                      Save partial
+                      {copy.savePartial}
                     </button>
                   </div>
                 </div>
@@ -430,12 +690,12 @@ export default function Home() {
             <div className="grid gap-6">
               <section className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_1px_0_var(--shadow-line)]">
                 <div className="flex items-center justify-between gap-4">
-                  <h3 className="text-lg font-semibold tracking-tight">Task tree</h3>
+                  <h3 className="text-lg font-semibold tracking-tight">{copy.taskTree}</h3>
                   <button
                     className="rounded-2xl border border-[var(--border)] px-3 py-2 text-sm font-medium text-[var(--muted)] hover:bg-[var(--surface-soft)]"
                     onClick={() => taskInputRef.current?.focus()}
                   >
-                    + Task
+                    + {copy.task}
                   </button>
                 </div>
                 <form
@@ -451,16 +711,16 @@ export default function Home() {
                     value={taskTitle}
                     onChange={(event) => setTaskTitle(event.target.value)}
                     className="min-w-0 flex-1 rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm outline-none placeholder:text-[var(--placeholder)]"
-                    placeholder="Add a task or path, e.g. Project / Subtask"
+                    placeholder={copy.addTaskPlaceholder}
                   />
                   <button className="rounded-2xl bg-[var(--primary)] px-5 py-3 text-sm font-semibold text-[var(--primary-foreground)] shadow-sm">
-                    Add
+                    {copy.add}
                   </button>
                 </form>
                 <div className="mt-5 overflow-visible rounded-2xl border border-[var(--border)]">
                   {visibleTaskRows.length === 0 ? (
                     <div className="bg-[var(--surface-soft)] px-4 py-6 text-sm text-[var(--muted)]">
-                      No tasks yet. Create your first focus tree node.
+                      {copy.noTasksYet}
                     </div>
                   ) : (
                     <div>
@@ -473,7 +733,7 @@ export default function Home() {
                         return (
                           <div
                             key={task.id}
-                            aria-label={`Task row ${task.title}`}
+                            aria-label={`${copy.task}: ${task.title}`}
                             className={`relative px-3 py-2.5 transition-colors hover:bg-[var(--surface-soft)] ${
                               isSelected ? "bg-[var(--surface-soft)]" : "bg-[var(--surface)]"
                             } ${rowIndex === 0 ? "rounded-t-2xl" : "border-t border-[var(--border-subtle)]"} ${
@@ -492,7 +752,7 @@ export default function Home() {
                                 <div className="relative z-[1] w-5 shrink-0">
                                   {hasChildren ? (
                                     <button
-                                      aria-label={isExpanded ? `Collapse ${task.title}` : `Expand ${task.title}`}
+                                      aria-label={isExpanded ? `${copy.toggleTaskHint}: ${task.title}` : `${copy.toggleTaskHint}: ${task.title}`}
                                       className="rounded-md px-1 py-0.5 text-xs text-[var(--muted)] hover:bg-[var(--surface)]"
                                       onClick={() => toggleTaskExpansion(task.id)}
                                     >
@@ -507,7 +767,7 @@ export default function Home() {
                                   )}
                                 </div>
                                 <button
-                                  aria-label={`Select ${task.title}`}
+                                  aria-label={`${copy.task}: ${task.title}`}
                                   className={`min-w-0 shrink text-left text-sm font-medium tracking-tight ${
                                     isDone ? "text-[var(--muted)] line-through" : "text-[var(--foreground)]"
                                   }`}
@@ -517,7 +777,7 @@ export default function Home() {
                                 </button>
                                 {isDone ? (
                                   <span className="rounded-full border border-[var(--border)] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.16em] text-[var(--muted)]">
-                                    Done
+                                    {copy.done}
                                   </span>
                                 ) : null}
                                 <span className="whitespace-nowrap text-xs text-[var(--muted)]">
@@ -527,17 +787,17 @@ export default function Home() {
                               <div className="ml-auto flex shrink-0 items-center gap-2">
                                 {!isDone ? (
                                   <button
-                                    aria-label={`Focus ${task.title}`}
+                                    aria-label={`${copy.focus}: ${task.title}`}
                                     className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--muted)] hover:bg-[var(--surface-soft)] disabled:opacity-40"
                                     disabled={Boolean(activeSession)}
                                     onClick={() => void startFocus(task.id, focusIntention, customPlannedSeconds).then(() => setFocusIntention(""))}
                                   >
-                                    Focus
+                                    {copy.focus}
                                   </button>
                                 ) : null}
                                 {!isDone ? (
                                   <button
-                                    aria-label={`Add subtask under ${task.title}`}
+                                    aria-label={`${copy.addSubtask}: ${task.title}`}
                                     className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--muted)] hover:bg-[var(--surface-soft)]"
                                     onClick={() => {
                                       setExpandedTaskOverrides((current) => ({
@@ -548,12 +808,12 @@ export default function Home() {
                                       setSubtaskTitle("");
                                     }}
                                   >
-                                    + Subtask
+                                    + {copy.addSubtask}
                                   </button>
                                 ) : null}
                                 <details className="task-row-menu relative z-20">
                                   <summary
-                                    aria-label={`More actions for ${task.title}`}
+                                    aria-label={`${copy.settings}: ${task.title}`}
                                     className="list-none rounded-full border border-[var(--border)] px-2.5 py-1.5 text-xs font-medium text-[var(--muted)] hover:bg-[var(--surface-soft)] [&::-webkit-details-marker]:hidden"
                                   >
                                     ...
@@ -567,7 +827,7 @@ export default function Home() {
                                         beginEditTask(task);
                                       }}
                                     >
-                                      Edit
+                                      {copy.edit}
                                     </button>
                                     <button
                                       type="button"
@@ -577,7 +837,7 @@ export default function Home() {
                                         void updateTask(task.id, { status: isDone ? "todo" : "done" });
                                       }}
                                     >
-                                      {isDone ? "Reopen" : "Done"}
+                                      {isDone ? copy.reopen : copy.done}
                                     </button>
                                     <button
                                       type="button"
@@ -603,7 +863,7 @@ export default function Home() {
                               >
                                 <div className="flex gap-2">
                                   <input
-                                    aria-label={`Subtask title under ${task.title}`}
+                                    aria-label={`${copy.addSubtask}: ${task.title}`}
                                     value={subtaskTitle}
                                     onChange={(event) => setSubtaskTitle(event.target.value)}
                                     className="min-w-0 flex-1 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 outline-none"
@@ -620,7 +880,7 @@ export default function Home() {
                                       setSubtaskTitle("");
                                     }}
                                   >
-                                    Cancel
+                                    {copy.cancel}
                                   </button>
                                 </div>
                               </form>
@@ -635,18 +895,18 @@ export default function Home() {
                               >
                                 <div className="grid gap-2 xl:grid-cols-[minmax(0,1fr)_180px] xl:items-center">
                                   <input
-                                    aria-label={`Edit title for ${task.title}`}
+                                    aria-label={`${copy.edit}: ${task.title}`}
                                     value={editingTaskTitle}
                                     onChange={(event) => setEditingTaskTitle(event.target.value)}
                                     className="min-w-0 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 outline-none"
                                   />
                                   <select
-                                    aria-label={`Move ${task.title}`}
+                                    aria-label={`${copy.task}: ${task.title}`}
                                     value={editingParentId}
                                     onChange={(event) => setEditingParentId(event.target.value)}
                                     className="min-w-0 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 outline-none"
                                   >
-                                    <option value="">Root</option>
+                                    <option value="">{copy.root}</option>
                                     {editableParentOptions.map(({ task: optionTask, depth: optionDepth }) => (
                                       <option key={optionTask.id} value={optionTask.id}>
                                         {`${"— ".repeat(optionDepth)}${optionTask.title}`}
@@ -656,14 +916,14 @@ export default function Home() {
                                 </div>
                                 <div className="mt-2 flex flex-wrap justify-end gap-2">
                                   <button className="rounded-xl bg-[var(--primary)] px-3 py-2 text-xs font-medium whitespace-nowrap text-[var(--primary-foreground)]">
-                                    Save task
+                                    {copy.saveTask}
                                   </button>
                                   <button
                                     type="button"
                                     className="rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-medium whitespace-nowrap"
                                     onClick={() => setEditingTaskId(null)}
                                   >
-                                    Cancel
+                                    {copy.cancel}
                                   </button>
                                 </div>
                               </form>
@@ -675,11 +935,11 @@ export default function Home() {
                   )}
                 </div>
                 <div className="mt-4 flex flex-wrap gap-4 text-xs text-[var(--muted)]">
-                  <span>🍅 = Completed Pomodoros</span>
+                  <span>🍅 = {copy.completedPomodoros}</span>
                   <span>•</span>
-                  <span>Click chevron to expand/collapse</span>
+                  <span>{copy.toggleTaskHint}</span>
                   <span>•</span>
-                  <span>Click task to select</span>
+                  <span>{copy.clickTaskHint}</span>
                 </div>
               </section>
 
@@ -687,13 +947,13 @@ export default function Home() {
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
                     <span aria-hidden="true" className="text-base">📦</span>
-                    <h3 className="text-lg font-semibold tracking-tight">Archived Tasks</h3>
+                    <h3 className="text-lg font-semibold tracking-tight">{copy.archivedTasks}</h3>
                     <span className="rounded-full bg-[var(--surface-soft)] px-2.5 py-1 text-xs font-medium text-[var(--muted)]">
                       {archivedBranchRoots.length}
                     </span>
                   </div>
                   <button
-                    aria-label={showArchivedTasks ? "Collapse archived tasks" : "Expand archived tasks"}
+                    aria-label={showArchivedTasks ? copy.collapseArchived : copy.expandArchived}
                     className="rounded-full px-2 py-1 text-base leading-none text-[var(--muted)] hover:bg-[var(--surface-soft)]"
                     onClick={() => setShowArchivedTasks((current) => !current)}
                   >
@@ -702,7 +962,7 @@ export default function Home() {
                 </div>
                 {showArchivedTasks ? (
                   archivedBranchRoots.length === 0 ? (
-                    <p className="mt-4 rounded-2xl bg-[var(--surface-soft)] px-4 py-3 text-sm text-[var(--muted)]">No archived tasks.</p>
+                    <p className="mt-4 rounded-2xl bg-[var(--surface-soft)] px-4 py-3 text-sm text-[var(--muted)]">{copy.noArchivedTasks}</p>
                   ) : (
                     <div className="mt-4 overflow-visible rounded-2xl border border-[var(--border)]">
                       {archivedBranchRoots.map((task, index) => {
@@ -729,11 +989,11 @@ export default function Home() {
                                   className="rounded-full border border-[var(--border)] px-3 py-1.5 text-xs font-medium text-[var(--muted)] hover:bg-[var(--surface-soft)]"
                                   onClick={() => void restoreTaskBranch(task.id)}
                                 >
-                                  Restore
+                                  {copy.restore}
                                 </button>
                                 <details className="task-row-menu relative z-20">
                                   <summary
-                                    aria-label={`More actions for archived ${task.title}`}
+                                    aria-label={`${copy.settings}: ${task.title}`}
                                     className="list-none rounded-full border border-[var(--border)] px-2.5 py-1.5 text-xs font-medium text-[var(--muted)] hover:bg-[var(--surface-soft)] [&::-webkit-details-marker]:hidden"
                                   >
                                     ...
@@ -747,7 +1007,7 @@ export default function Home() {
                                         beginEditTask(task);
                                       }}
                                     >
-                                      Edit
+                                      {copy.edit}
                                     </button>
                                   </div>
                                 </details>
@@ -762,13 +1022,13 @@ export default function Home() {
               </section>
 
               <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6">
-                <h3 className="text-lg font-semibold">Today</h3>
+                <h3 className="text-lg font-semibold">{copy.today}</h3>
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
                   {[
-                    ["Completed", String(todayStats.completedCount)],
-                    ["Partial", String(todayStats.partialCount)],
-                    ["Focus time", formatDuration(todayStats.totalFocusSeconds)],
-                    ["Interruptions", String(todayStats.openInterruptionCount)],
+                    [copy.completed, String(todayStats.completedCount)],
+                    [copy.partial, String(todayStats.partialCount)],
+                    [copy.focusTime, formatDuration(todayStats.totalFocusSeconds)],
+                    [copy.interruptions, String(todayStats.openInterruptionCount)],
                   ].map(([label, value]) => (
                     <div key={label} className="rounded-2xl bg-[var(--surface-soft)] p-4">
                       <p className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--muted)]">{label}</p>
@@ -777,18 +1037,18 @@ export default function Home() {
                   ))}
                 </div>
                 <div className="mt-5 space-y-3">
-                  <p className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--muted)]">Recent sessions</p>
+                  <p className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--muted)]">{copy.recentSessions}</p>
                   {recentSessions.length === 0 ? (
-                    <p className="rounded-2xl bg-[var(--surface-soft)] px-4 py-3 text-sm text-[var(--muted)]">No completed focus sessions yet.</p>
+                    <p className="rounded-2xl bg-[var(--surface-soft)] px-4 py-3 text-sm text-[var(--muted)]">{copy.noCompletedSessions}</p>
                   ) : (
                     recentSessions.map((session) => (
                       <article
                         key={session.id}
-                        aria-label={`Recent session: ${session.taskPathSnapshot ?? session.intention ?? "Unassigned"}`}
+                        aria-label={`${copy.recentSessions}: ${session.taskPathSnapshot ?? session.intention ?? copy.unassigned}`}
                         className="rounded-2xl bg-[var(--surface-soft)] px-4 py-3 text-sm"
                       >
                         <div className="flex items-center justify-between gap-3">
-                          <span className="font-medium">{session.taskPathSnapshot ?? session.intention ?? "Unassigned"}</span>
+                          <span className="font-medium">{session.taskPathSnapshot ?? session.intention ?? copy.unassigned}</span>
                           <span className="text-xs text-[var(--muted)]">{session.status}</span>
                         </div>
                         <p className="mt-1 text-xs text-[var(--muted)]">
@@ -804,19 +1064,19 @@ export default function Home() {
                             }}
                           >
                             <select
-                              aria-label={`Correct attribution for ${session.taskPathSnapshot ?? session.intention ?? "session"}`}
+                              aria-label={`${copy.correctAttribution}: ${session.taskPathSnapshot ?? session.intention ?? copy.session}`}
                               value={editingSessionTaskId}
                               onChange={(event) => setEditingSessionTaskId(event.target.value)}
                               className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 outline-none"
                             >
-                              <option value="">Unassigned / intention</option>
+                              <option value="">{copy.unassigned}</option>
                               {activeTaskRows.map(({ task, depth }) => (
                                 <option key={task.id} value={task.id}>
                                   {`${"— ".repeat(depth)}${task.title}`}
                                 </option>
                               ))}
                             </select>
-                            <button className="rounded-xl bg-[var(--primary)] px-3 py-2 text-xs font-medium text-[var(--primary-foreground)]">Save</button>
+                            <button className="rounded-xl bg-[var(--primary)] px-3 py-2 text-xs font-medium text-[var(--primary-foreground)]">{copy.save}</button>
                             <button
                               type="button"
                               className="rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-medium"
@@ -825,7 +1085,7 @@ export default function Home() {
                                 setEditingSessionTaskId("");
                               }}
                             >
-                              Cancel
+                              {copy.cancel}
                             </button>
                           </form>
                         ) : (
@@ -833,7 +1093,7 @@ export default function Home() {
                             className="mt-3 rounded-full border border-[var(--border)] px-3 py-1 text-xs font-medium text-[var(--muted)]"
                             onClick={() => beginEditSession(session)}
                           >
-                            Correct attribution
+                            {copy.correctAttribution}
                           </button>
                         )}
                       </article>
@@ -846,10 +1106,10 @@ export default function Home() {
 
           <aside className="grid content-start gap-6">
             <section className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6">
-              <h3 className="text-lg font-semibold">Interruptions</h3>
+              <h3 className="text-lg font-semibold">{copy.interruptions}</h3>
               <textarea
                 className="mt-4 min-h-40 w-full resize-none rounded-2xl border border-[var(--border)] bg-[var(--surface-soft)] p-4 text-sm outline-none placeholder:text-[var(--placeholder)]"
-                placeholder="Capture an intention, a summary, or the next follow-up task..."
+                placeholder={copy.openInterruptionPlaceholder}
                 value={interruptionText}
                 onChange={(event) => setInterruptionText(event.target.value)}
                 onKeyDown={(event) => {
@@ -864,12 +1124,12 @@ export default function Home() {
                   className="rounded-full border border-[var(--border)] px-4 py-2 text-sm font-medium"
                   onClick={() => void saveInterruptionNote()}
                 >
-                  Add interruption
+                  {copy.addInterruption}
                 </button>
               </div>
               <div className="mt-5 space-y-3">
                 {openInterruptions.length === 0 ? (
-                  <p className="text-sm text-[var(--muted)]">No open interruptions.</p>
+                  <p className="text-sm text-[var(--muted)]">{copy.noOpenInterruptions}</p>
                 ) : (
                   openInterruptions.map((interruption) => (
                     <div key={interruption.id} className="rounded-2xl border border-[var(--border)] bg-[var(--surface-soft)] p-3">
@@ -879,19 +1139,19 @@ export default function Home() {
                           className="rounded-full border border-[var(--border)] px-3 py-1 text-xs font-medium"
                           onClick={() => void convertInterruptionToTask(interruption.id)}
                         >
-                          Convert to task
+                          {copy.convertToTask}
                         </button>
                         <button
                           className="rounded-full border border-[var(--border)] px-3 py-1 text-xs font-medium"
                           onClick={() => void markInterruptionDone(interruption.id)}
                         >
-                          Mark done
+                          {copy.markDone}
                         </button>
                         <button
                           className="rounded-full border border-[var(--border)] px-3 py-1 text-xs font-medium"
                           onClick={() => void dismissInterruption(interruption.id)}
                         >
-                          Dismiss
+                          {copy.dismiss}
                         </button>
                       </div>
                     </div>
@@ -901,10 +1161,10 @@ export default function Home() {
             </section>
 
             <section className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6">
-              <h3 className="text-lg font-semibold">Settings</h3>
+              <h3 className="text-lg font-semibold">{copy.settings}</h3>
               <div className="mt-4 space-y-4 text-sm">
                 <label className="block rounded-2xl bg-[var(--surface-soft)] px-4 py-3">
-                  <span>Default focus duration</span>
+                  <span>{copy.defaultFocusDuration}</span>
                   <select
                     className="mt-2 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 font-medium outline-none"
                     value={settings.defaultFocusSeconds}
@@ -915,20 +1175,32 @@ export default function Home() {
                     <option value={90 * 60}>90 min</option>
                   </select>
                 </label>
+
                 <label className="block rounded-2xl bg-[var(--surface-soft)] px-4 py-3">
-                  <span>Theme</span>
+                  <span>{copy.language}</span>
+                  <select
+                    className="mt-2 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 font-medium outline-none"
+                    value={language}
+                    onChange={(event) => void updateSettings({ language: event.target.value as AppLanguage })}
+                  >
+                    <option value="en">English</option>
+                    <option value="zh">中文</option>
+                  </select>
+                </label>
+                <label className="block rounded-2xl bg-[var(--surface-soft)] px-4 py-3">
+                  <span>{copy.theme}</span>
                   <select
                     className="mt-2 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 font-medium outline-none"
                     value={settings.theme}
                     onChange={(event) => void updateSettings({ theme: event.target.value as typeof settings.theme })}
                   >
-                    <option value="system">System</option>
-                    <option value="light">Light</option>
-                    <option value="dark">Dark</option>
+                    <option value="system">{copy.system}</option>
+                    <option value="light">{copy.light}</option>
+                    <option value="dark">{copy.dark}</option>
                   </select>
                 </label>
                 <label className="flex items-center justify-between gap-4 rounded-2xl bg-[var(--surface-soft)] px-4 py-3">
-                  <span>Browser notifications</span>
+                  <span>{copy.browserNotifications}</span>
                   <input
                     type="checkbox"
                     checked={settings.enableNotifications}
@@ -937,7 +1209,7 @@ export default function Home() {
                   />
                 </label>
                 <p className="px-1 text-xs text-[var(--muted)]">
-                  Notification permission: {notificationStatus}. In-page completion panel remains primary.
+                  {copy.notificationPermission}: {notificationStatus}. {copy.notificationPrimary}
                 </p>
                 <button
                   className="w-full rounded-2xl bg-[var(--primary)] px-4 py-3 text-sm font-medium text-[var(--primary-foreground)]"
@@ -952,13 +1224,13 @@ export default function Home() {
                     URL.revokeObjectURL(url);
                   }}
                 >
-                  Export JSON
+                  {copy.exportJson}
                 </button>
                 <button
                   className="w-full rounded-2xl border border-[var(--border)] px-4 py-3 text-sm font-medium"
                   onClick={() => setShowImport((value) => !value)}
                 >
-                  Import JSON
+                  {copy.importJson}
                 </button>
                 {showImport ? (
                   <form
@@ -971,14 +1243,14 @@ export default function Home() {
                     }}
                   >
                     <textarea
-                      aria-label="Pomotree import JSON"
+                      aria-label={copy.importJson}
                       className="min-h-32 w-full resize-none rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-xs outline-none placeholder:text-[var(--placeholder)]"
                       value={importText}
                       onChange={(event) => setImportText(event.target.value)}
-                      placeholder="Paste a Pomotree export JSON object"
+                      placeholder={copy.importPlaceholder}
                     />
                     <div className="flex gap-2">
-                      <button className="rounded-xl bg-[var(--primary)] px-3 py-2 text-xs font-medium text-[var(--primary-foreground)]">Restore data</button>
+                      <button className="rounded-xl bg-[var(--primary)] px-3 py-2 text-xs font-medium text-[var(--primary-foreground)]">{copy.restoreData}</button>
                       <button
                         type="button"
                         className="rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-medium"
@@ -987,7 +1259,7 @@ export default function Home() {
                           setShowImport(false);
                         }}
                       >
-                        Cancel
+                        {copy.cancel}
                       </button>
                     </div>
                   </form>
