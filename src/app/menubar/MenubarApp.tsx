@@ -232,6 +232,29 @@ function IconText({ icon, children }: { icon: React.ReactNode; children: React.R
   return <span className="inline-flex items-center justify-center gap-2.5">{icon}{children}</span>;
 }
 
+function TomatoLogo() {
+  return (
+    <span className="grid h-8 w-8 place-items-center rounded-full bg-[#fff2ef] ring-1 ring-[#efc3ba]/70">
+      <svg viewBox="0 0 32 32" className="h-6 w-6" aria-hidden="true">
+        <path
+          d="M16 10.1c5.55 0 9.9 3.75 9.9 9.25 0 5.05-3.98 8.95-9.9 8.95s-9.9-3.9-9.9-8.95c0-5.5 4.35-9.25 9.9-9.25Z"
+          fill="#e84432"
+        />
+        <path
+          d="M16 10.1c-1.95-2.38-4.05-3.35-6.75-3.05 1.18 2.6 3.15 3.88 6.75 3.05Z"
+          fill="#4f9c58"
+        />
+        <path
+          d="M16 10.1c1.95-2.38 4.05-3.35 6.75-3.05-1.18 2.6-3.15 3.88-6.75 3.05Z"
+          fill="#3d8d4d"
+        />
+        <path d="M16 11.2c-.55-2.45-.12-4.25 1.45-5.95 1.1 2.18.76 4.1-1.45 5.95Z" fill="#2f7d43" />
+        <path d="M11.4 17.1c.82-2.05 2.6-3.12 4.95-3.12" fill="none" stroke="#ff7a68" strokeLinecap="round" strokeWidth="1.5" />
+      </svg>
+    </span>
+  );
+}
+
 function OpenDashboardButton({ copy }: { copy: MenubarCopy }) {
   const openDashboard = () => {
     if (isTauriRuntime()) {
@@ -249,7 +272,7 @@ function OpenDashboardButton({ copy }: { copy: MenubarCopy }) {
       className="menubar-dashboard-row flex h-[62px] w-full items-center justify-between rounded-b-[32px] px-5 text-[14px] font-semibold text-[var(--menubar-muted-strong)]"
     >
       <span className="flex items-center gap-3">
-        <span className="grid h-8 w-8 place-items-center rounded-full bg-[#17191c] text-[18px] font-semibold text-white shadow-[0_8px_18px_rgba(17,19,21,0.18)]">N</span>
+        <TomatoLogo />
         <span>{copy.dashboard}</span>
       </span>
       <ExternalLink size={23} strokeWidth={1.8} aria-hidden="true" />
