@@ -115,7 +115,7 @@ function OpenDashboardButton() {
     <button
       type="button"
       onClick={openDashboard}
-      className="menubar-dashboard-row flex h-[62px] w-full items-center justify-between px-5 text-[14px] font-semibold text-[var(--menubar-muted-strong)]"
+      className="menubar-dashboard-row flex h-[62px] w-full items-center justify-between rounded-b-[19px] px-5 text-[14px] font-semibold text-[var(--menubar-muted-strong)]"
     >
       <span className="flex items-center gap-3">
         <span className="grid h-8 w-8 place-items-center rounded-full bg-[#17191c] text-[18px] font-semibold text-white shadow-[0_8px_18px_rgba(17,19,21,0.18)]">N</span>
@@ -611,7 +611,7 @@ export function MenubarApp() {
       className="bg-transparent text-[var(--menubar-text)]"
       style={{ width: MENUBAR_WINDOW.width, height: MENUBAR_WINDOW.height }}
     >
-      <section className="menubar-shell flex h-full w-full flex-col overflow-hidden rounded-[19px] border border-[var(--menubar-border)] [background:var(--menubar-surface)] shadow-[0_20px_60px_rgba(17,19,21,0.14)]">
+      <section className="menubar-shell isolate flex h-full w-full flex-col overflow-hidden rounded-[19px] border border-[var(--menubar-border)] [background:var(--menubar-surface)] shadow-[0_20px_60px_rgba(17,19,21,0.14)]">
         <div className="min-h-0 flex-1 overflow-y-auto">
           <MenubarHeader activeSession={activeSession} remainingSeconds={remainingSeconds} />
 
@@ -675,7 +675,7 @@ export function MenubarApp() {
           }, "Failed to discard session")}
         />
 
-        <div className="border-t border-[var(--menubar-border)]">
+        <div className="overflow-hidden rounded-b-[19px] border-t border-[var(--menubar-border)]">
           <OpenDashboardButton />
         </div>
       </section>
