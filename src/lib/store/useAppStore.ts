@@ -69,6 +69,75 @@ async function refresh(set: (state: Partial<AppState>) => void) {
   set({ ...state, ready: true, loading: false, error: null });
 }
 
+async function refreshAndBroadcast(set: (state: Partial<AppState>) => void) {
+  await refresh(set);
+  broadcastAppStateChange();
+}
+
+const APP_STATE_CHANNEL = "pomotree-app-state";
+const APP_STATE_CLIENT_ID =
+  typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2);
+
+type AppStateChangeMessage = {
+  source: string;
+  changedAt: number;
+};
+
+let stateChannel: BroadcastChannel | null = null;
+let subscribedToStateChanges = false;
+
+function getStateChannel() {
+  if (typeof BroadcastChannel === "undefined") return null;
+  stateChannel ??= new BroadcastChannel(APP_STATE_CHANNEL);
+  return stateChannel;
+}
+
+function broadcastAppStateChange() {
+  if (typeof window === "undefined") return;
+
+  const message: AppStateChangeMessage = { source: APP_STATE_CLIENT_ID, changedAt: Date.now() };
+  getStateChannel()?.postMessage(message);
+
+  try {
+    window.localStorage.setItem(APP_STATE_CHANNEL, JSON.stringify(message));
+  } catch {
+    // Storage events are only a fallback; BroadcastChannel is preferred when available.
+  }
+}
+
+function subscribeToAppStateChanges(onChange: () => void) {
+  if (typeof window === "undefined" || subscribedToStateChanges) return;
+  subscribedToStateChanges = true;
+
+  const handleMessage = (message: AppStateChangeMessage | null | undefined) => {
+    if (!message || message.source === APP_STATE_CLIENT_ID) return;
+    onChange();
+  };
+
+  const channel = getStateChannel();
+  if (channel) {
+    channel.onmessage = (event: MessageEvent<AppStateChangeMessage>) => {
+      handleMessage(event.data);
+    };
+  }
+
+  window.addEventListener("storage", (event) => {
+    if (event.key !== APP_STATE_CHANNEL || !event.newValue) return;
+    try {
+      handleMessage(JSON.parse(event.newValue) as AppStateChangeMessage);
+    } catch {
+      // Ignore malformed cross-window sync payloads.
+    }
+  });
+
+  window.addEventListener("focus", onChange);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") onChange();
+  });
+}
+
 export const useAppStore = create<AppState>((set, get) => ({
   ready: false,
   loading: false,
@@ -83,7 +152,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (get().loading) return;
     set({ loading: true, error: null });
     try {
-      await refresh(set);
+      await refreshAndBroadcast(set);
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to initialize", loading: false });
     }
@@ -91,7 +160,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   updateSettings: async (input) => {
     try {
       await updateSettings(input);
-      await refresh(set);
+      await refreshAndBroadcast(set);
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to update settings" });
       throw error;
@@ -100,7 +169,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   createTask: async (title, parentId = null) => {
     try {
       await createTask(title, parentId);
-      await refresh(set);
+      await refreshAndBroadcast(set);
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to create task" });
       throw error;
@@ -109,7 +178,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   createTaskPath: async (path) => {
     try {
       await createTaskPath(path);
-      await refresh(set);
+      await refreshAndBroadcast(set);
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to create task path" });
       throw error;
@@ -118,7 +187,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   updateTask: async (taskId, input) => {
     try {
       await updateTask(taskId, input);
-      await refresh(set);
+      await refreshAndBroadcast(set);
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to update task" });
       throw error;
@@ -127,7 +196,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   moveTask: async (taskId, parentId) => {
     try {
       await moveTask(taskId, parentId);
-      await refresh(set);
+      await refreshAndBroadcast(set);
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to move task" });
       throw error;
@@ -136,7 +205,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   archiveTask: async (taskId) => {
     try {
       await archiveTask(taskId);
-      await refresh(set);
+      await refreshAndBroadcast(set);
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to archive task" });
       throw error;
@@ -145,7 +214,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   restoreTaskBranch: async (taskId) => {
     try {
       await restoreTaskBranch(taskId);
-      await refresh(set);
+      await refreshAndBroadcast(set);
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to restore archived branch" });
       throw error;
@@ -154,7 +223,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   changeSessionAttribution: async (sessionId, taskId) => {
     try {
       await changeSessionAttribution(sessionId, taskId);
-      await refresh(set);
+      await refreshAndBroadcast(set);
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to update session attribution" });
       throw error;
@@ -163,7 +232,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   startFocus: async (taskId = null, intention = null, plannedSeconds) => {
     try {
       await startFocus(taskId, intention, plannedSeconds);
-      await refresh(set);
+      await refreshAndBroadcast(set);
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to start focus" });
       throw error;
@@ -172,7 +241,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   pauseSession: async () => {
     try {
       await pauseSession();
-      await refresh(set);
+      await refreshAndBroadcast(set);
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to pause session" });
       throw error;
@@ -181,7 +250,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   resumeSession: async () => {
     try {
       await resumeSession();
-      await refresh(set);
+      await refreshAndBroadcast(set);
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to resume session" });
       throw error;
@@ -190,7 +259,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   discardSession: async () => {
     try {
       await discardSession();
-      await refresh(set);
+      await refreshAndBroadcast(set);
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to discard session" });
       throw error;
@@ -199,7 +268,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   requestFinish: async () => {
     try {
       await requestFinish();
-      await refresh(set);
+      await refreshAndBroadcast(set);
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to finish session" });
       throw error;
@@ -208,7 +277,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   expireRunningSession: async (sessionId) => {
     try {
       await expireRunningSession(sessionId);
-      await refresh(set);
+      await refreshAndBroadcast(set);
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to expire session" });
       throw error;
@@ -217,7 +286,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   saveFinish: async (input) => {
     try {
       await saveFinish(input);
-      await refresh(set);
+      await refreshAndBroadcast(set);
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to save session" });
       throw error;
@@ -231,6 +300,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const state = await importJson(json);
       set({ ...state, ready: true, loading: false, error: null });
+      broadcastAppStateChange();
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to import JSON" });
       throw error;
@@ -239,7 +309,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   createInterruption: async (text) => {
     try {
       await createInterruption(text);
-      await refresh(set);
+      await refreshAndBroadcast(set);
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to create interruption" });
       throw error;
@@ -248,7 +318,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   dismissInterruption: async (interruptionId) => {
     try {
       await dismissInterruption(interruptionId);
-      await refresh(set);
+      await refreshAndBroadcast(set);
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to dismiss interruption" });
       throw error;
@@ -257,7 +327,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   markInterruptionDone: async (interruptionId) => {
     try {
       await markInterruptionDone(interruptionId);
-      await refresh(set);
+      await refreshAndBroadcast(set);
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to complete interruption" });
       throw error;
@@ -266,10 +336,16 @@ export const useAppStore = create<AppState>((set, get) => ({
   convertInterruptionToTask: async (interruptionId) => {
     try {
       await convertInterruptionToTask(interruptionId);
-      await refresh(set);
+      await refreshAndBroadcast(set);
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to convert interruption" });
       throw error;
     }
   },
 }));
+
+
+subscribeToAppStateChanges(() => {
+  if (useAppStore.getState().loading) return;
+  void refresh(useAppStore.setState);
+});
