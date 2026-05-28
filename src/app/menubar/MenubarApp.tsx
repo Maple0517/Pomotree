@@ -605,7 +605,7 @@ export function MenubarApp() {
     <main
       className="h-[560px] w-[380px] overflow-hidden bg-transparent text-[var(--menubar-text)]"
     >
-      <section className="menubar-shell isolate flex h-full w-full flex-col overflow-hidden rounded-[32px] border border-[var(--menubar-border)] [background:var(--menubar-surface)] shadow-[0_20px_60px_rgba(17,19,21,0.14)]">
+      <section className="menubar-shell isolate flex h-full w-full flex-col overflow-hidden rounded-[32px] border border-[var(--menubar-border)] [background:var(--menubar-surface)]">
         <div className="min-h-0 flex-1 overflow-y-auto">
           <MenubarHeader activeSession={activeSession} remainingSeconds={remainingSeconds} />
 
