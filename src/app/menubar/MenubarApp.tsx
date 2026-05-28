@@ -64,7 +64,7 @@ function invokeTauriCommand(command: string, args?: Record<string, unknown>) {
 }
 
 function PrimaryButton({ children, disabled, form, name, onClick, tone = "default", type = "button", value }: { children: React.ReactNode; disabled?: boolean; form?: string; name?: string; onClick?: () => void; tone?: "default" | "hot"; type?: "button" | "submit"; value?: string }) {
-  const toneClass = tone === "hot" ? "bg-[#ff5a1f] text-white shadow-[0_10px_24px_rgba(255,90,31,0.28)]" : "bg-[#f3f0ec] text-[#111315] shadow-[0_10px_26px_rgba(0,0,0,0.22)]";
+  const toneClass = tone === "hot" ? "bg-[#ff5a1f] text-white shadow-[0_10px_24px_rgba(255,90,31,0.24)]" : "bg-[#17191c] text-white shadow-[0_10px_24px_rgba(17,19,21,0.16)]";
 
   return (
     <button
@@ -118,7 +118,7 @@ function OpenDashboardButton() {
       className="menubar-dashboard-row flex h-[62px] w-full items-center justify-between px-5 text-[14px] font-semibold text-[var(--menubar-muted-strong)]"
     >
       <span className="flex items-center gap-3">
-        <span className="grid h-8 w-8 place-items-center rounded-full bg-black text-[18px] font-semibold text-[#d8d5d1] shadow-[0_8px_18px_rgba(0,0,0,0.35)]">N</span>
+        <span className="grid h-8 w-8 place-items-center rounded-full bg-[#17191c] text-[18px] font-semibold text-white shadow-[0_8px_18px_rgba(17,19,21,0.18)]">N</span>
         <span>Open Dashboard</span>
       </span>
       <ExternalLink size={23} strokeWidth={1.8} aria-hidden="true" />
@@ -132,7 +132,7 @@ function SettingsButton() {
       type="button"
       aria-label="Settings placeholder"
       title="Settings live in Dashboard for v0"
-      className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-full border border-[var(--menubar-border)] bg-[#10151a]/60 text-[var(--menubar-text)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.03)]"
+      className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-full border border-[var(--menubar-border)] bg-white/70 text-[var(--menubar-text)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.65),0_8px_18px_rgba(17,19,21,0.08)]"
     >
       <Settings size={21} strokeWidth={2.2} />
     </button>
@@ -603,10 +603,10 @@ export function MenubarApp() {
 
   return (
     <main
-      className="bg-[#03080c] text-[var(--menubar-text)]"
+      className="bg-[#f3f2ee] text-[var(--menubar-text)]"
       style={{ width: MENUBAR_WINDOW.width, height: MENUBAR_WINDOW.height }}
     >
-      <section className="menubar-shell flex h-full w-full flex-col overflow-hidden rounded-[19px] border border-[var(--menubar-border)] [background:var(--menubar-surface)] shadow-[0_20px_60px_rgba(0,0,0,0.45)]">
+      <section className="menubar-shell flex h-full w-full flex-col overflow-hidden rounded-[19px] border border-[var(--menubar-border)] [background:var(--menubar-surface)] shadow-[0_20px_60px_rgba(17,19,21,0.14)]">
         <div className="min-h-0 flex-1 overflow-y-auto">
           <MenubarHeader activeSession={activeSession} remainingSeconds={remainingSeconds} />
 

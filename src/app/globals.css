@@ -77,15 +77,15 @@ body {
 
 
 html.menubar-popover-root {
-  --menubar-bg: #03080c;
-  --menubar-surface: radial-gradient(circle at 22% 0%, rgba(46, 55, 64, 0.5), transparent 42%), linear-gradient(145deg, #171d22 0%, #101519 52%, #0c1115 100%);
-  --menubar-soft: rgba(255, 255, 255, 0.045);
-  --menubar-text: #f2f0ed;
-  --menubar-muted: rgba(242, 240, 237, 0.52);
-  --menubar-muted-strong: rgba(242, 240, 237, 0.72);
-  --menubar-placeholder: rgba(242, 240, 237, 0.28);
-  --menubar-border: rgba(255, 255, 255, 0.075);
-  --menubar-border-strong: rgba(255, 255, 255, 0.13);
+  --menubar-bg: #f3f2ee;
+  --menubar-surface: linear-gradient(145deg, #ffffff 0%, #f8f7f4 54%, #efeee9 100%);
+  --menubar-soft: rgba(17, 19, 21, 0.045);
+  --menubar-text: #17191c;
+  --menubar-muted: rgba(23, 25, 28, 0.48);
+  --menubar-muted-strong: rgba(23, 25, 28, 0.68);
+  --menubar-placeholder: rgba(23, 25, 28, 0.32);
+  --menubar-border: rgba(17, 19, 21, 0.09);
+  --menubar-border-strong: rgba(17, 19, 21, 0.14);
   background: var(--menubar-bg);
 }
 
@@ -94,7 +94,7 @@ body.menubar-popover-body {
 }
 
 .menubar-shell {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 .menubar-shell input,
@@ -111,8 +111,8 @@ body.menubar-popover-body {
 .menubar-shell input:focus,
 .menubar-shell textarea:focus,
 .menubar-shell select:focus {
-  border-color: rgba(255, 255, 255, 0.25);
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.04);
+  border-color: rgba(17, 19, 21, 0.28);
+  box-shadow: 0 0 0 3px rgba(17, 19, 21, 0.04);
 }
 
 .menubar-shell ::placeholder {
