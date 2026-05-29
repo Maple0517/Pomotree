@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Check, CheckCircle2, ChevronDown, Circle, ExternalLink, Globe2, Lightbulb, Monitor, Moon, Pause, Pencil, Play, Settings, Square, Sun } from "lucide-react";
+import { ArrowLeft, Check, CheckCircle2, ChevronDown, Circle, ExternalLink, Globe2, Lightbulb, Monitor, Moon, Pause, Pencil, Play, Settings, Square, Sun, Timer } from "lucide-react";
 import { getTaskPathIds } from "@/lib/services/taskSelectors";
 import { useAppStore } from "@/lib/store/useAppStore";
 import { computeRemainingSeconds, formatClock } from "@/lib/utils/timer";
@@ -195,7 +195,7 @@ function invokeTauriCommand(command: string, args?: Record<string, unknown>) {
 }
 
 function PrimaryButton({ children, disabled, form, name, onClick, tone = "default", type = "button", value }: { children: React.ReactNode; disabled?: boolean; form?: string; name?: string; onClick?: () => void; tone?: "default" | "hot"; type?: "button" | "submit"; value?: string }) {
-  const toneClass = tone === "hot" ? "bg-[#ff5a1f] text-white shadow-[0_10px_24px_rgba(255,90,31,0.24)]" : "bg-[#17191c] text-white shadow-[0_10px_24px_rgba(17,19,21,0.16)]";
+  const toneClass = tone === "hot" ? "bg-[#ff5a1f] text-white shadow-[0_10px_24px_rgba(255,90,31,0.24)] disabled:bg-[var(--menubar-soft)] disabled:text-[var(--menubar-muted)]" : "bg-[#17191c] text-white shadow-[0_10px_24px_rgba(17,19,21,0.16)] disabled:bg-[var(--menubar-soft)] disabled:text-[var(--menubar-muted)]";
 
   return (
     <button
@@ -205,7 +205,7 @@ function PrimaryButton({ children, disabled, form, name, onClick, tone = "defaul
       name={name}
       onClick={onClick}
       value={value}
-      className={`menubar-button h-[54px] w-full rounded-[10px] px-4 text-[17px] font-semibold ${toneClass} disabled:opacity-75`}
+      className={`menubar-button h-[54px] w-full rounded-[10px] px-4 text-[17px] font-semibold ${toneClass} disabled:opacity-100`}
     >
       {children}
     </button>
@@ -668,7 +668,7 @@ function MenubarHeader({ activeSession, copy, onSettings, remainingSeconds }: { 
   return (
     <header className="flex items-start justify-between gap-3 px-5 pt-[22px]">
       <div className="flex min-w-0 items-center gap-3">
-        <span className="text-[34px] leading-none" aria-hidden="true">{isPaused ? "⏸" : "🍅"}</span>
+        <span className="grid h-11 w-11 place-items-center rounded-full bg-[var(--menubar-soft)] text-[var(--menubar-muted-strong)]" aria-hidden="true">{isPaused ? <Pause size={22} fill="currentColor" /> : <Timer size={24} strokeWidth={2.2} />}</span>
         <h1 className="text-[38px] font-bold leading-none tracking-[-0.04em] text-[var(--menubar-text)]">{isPaused ? `${formatClock(remainingSeconds)} ${copy.pause.toLowerCase()}` : formatClock(remainingSeconds)}</h1>
       </div>
       <SettingsButton copy={copy} onClick={onSettings} />

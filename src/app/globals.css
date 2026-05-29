@@ -12,6 +12,12 @@
   --placeholder: rgba(17, 17, 17, 0.32);
   --primary: #111111;
   --primary-foreground: #ffffff;
+  --accent: #f05a32;
+  --accent-soft: #fff0eb;
+  --accent-border: rgba(240, 90, 50, 0.24);
+  --accent-foreground: #ffffff;
+  --success: #2f7d43;
+  --success-soft: #edf8ef;
   --shadow-line: rgba(0, 0, 0, 0.02);
   --danger-bg: #fef2f2;
   --danger-border: #fecaca;
@@ -38,6 +44,12 @@
   --placeholder: rgba(247, 246, 242, 0.38);
   --primary: #f7f6f2;
   --primary-foreground: #111111;
+  --accent: #ff7048;
+  --accent-soft: rgba(255, 112, 72, 0.13);
+  --accent-border: rgba(255, 112, 72, 0.28);
+  --accent-foreground: #111111;
+  --success: #7ddc87;
+  --success-soft: rgba(125, 220, 135, 0.12);
   --shadow-line: rgba(255, 255, 255, 0.04);
   --danger-bg: rgba(127, 29, 29, 0.34);
   --danger-border: rgba(248, 113, 113, 0.38);
@@ -71,7 +83,8 @@ body {
   min-height: 100vh;
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  font-feature-settings: "ss01" 1, "cv05" 1;
 }
 
 
@@ -193,6 +206,11 @@ summary {
 
 button:disabled {
   cursor: not-allowed;
+}
+
+.menubar-button:disabled {
+  box-shadow: none;
+  filter: grayscale(0.18);
 }
 
 button:not(:disabled):not(.menubar-button):not([class*="bg-[var(--primary)]"]):hover,

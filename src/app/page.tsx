@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Archive, Check, ChevronDown, ChevronRight, MoreHorizontal, Sprout, Timer } from "lucide-react";
 import { getActiveTaskRows, getArchivedBranchRoots, getAutoExpandedTaskIds, getTaskChildrenMap, getTaskRows } from "@/lib/services/taskSelectors";
 import { useAppStore } from "@/lib/store/useAppStore";
 import { computeRemainingSeconds, formatClock } from "@/lib/utils/timer";
@@ -89,6 +90,26 @@ type DashboardCopy = {
   session: string;
   unassigned: string;
 };
+
+
+function MetricCard({ label, value, tone = "default" }: { label: string; value: string; tone?: "default" | "accent" }) {
+  return (
+    <div className={`rounded-[1.35rem] border p-4 ${tone === "accent" ? "border-[var(--accent-border)] bg-[var(--accent-soft)]" : "border-transparent bg-[var(--surface-soft)]"}`}>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">{label}</p>
+      <p className="mt-2 truncate text-sm font-semibold text-[var(--foreground)]">{value}</p>
+    </div>
+  );
+}
+
+function EmptyState({ icon, title, action }: { icon: React.ReactNode; title: string; action?: string }) {
+  return (
+    <div className="grid place-items-center rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface-soft)] px-4 py-7 text-center">
+      <div className="mb-3 grid h-10 w-10 place-items-center rounded-full bg-[var(--surface)] text-[var(--muted)] shadow-[0_1px_0_var(--shadow-line)]">{icon}</div>
+      <p className="max-w-[34ch] text-sm font-medium text-[var(--muted-strong)]">{title}</p>
+      {action ? <p className="mt-1 text-xs text-[var(--muted)]">{action}</p> : null}
+    </div>
+  );
+}
 
 const DASHBOARD_TEXT: Record<AppLanguage, DashboardCopy> = {
   en: {
@@ -513,8 +534,8 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
-      <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-6 py-6 lg:px-10">
+    <main className="min-h-[100dvh] bg-[var(--background)] text-[var(--foreground)]">
+      <div className="mx-auto flex min-h-[100dvh] w-full max-w-7xl flex-col px-6 py-6 lg:px-10">
         <header className="flex items-center justify-between border-b border-[var(--border)] pb-5">
           <div>
             <p className="text-sm font-medium tracking-[0.18em] text-[var(--muted)] uppercase">Pomotree</p>
@@ -534,16 +555,20 @@ export default function Home() {
 
         <section className="grid flex-1 items-start gap-6 py-6 lg:grid-cols-[1.2fr_0.8fr] xl:grid-cols-[1.35fr_0.65fr]">
           <div className="grid content-start gap-6">
-            <section className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_1px_0_var(--shadow-line)]">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-sm font-medium text-[var(--muted)]">{copy.currentFocus}</p>
-                  <h2 className="mt-1 text-4xl font-semibold tracking-tight" aria-label={`${copy.planned} ${formatClock(remainingSeconds)}`}>{formatClock(remainingSeconds)}</h2>
+            <section className="overflow-hidden rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] shadow-[0_1px_0_var(--shadow-line)]">
+              <div className="grid gap-6 p-6 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
+                <div className="min-w-0">
+                  <div className="inline-flex items-center gap-2 rounded-full border border-[var(--accent-border)] bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
+                    <Timer size={14} strokeWidth={2} aria-hidden="true" />
+                    {copy.currentFocus}
+                  </div>
+                  <h2 className="mt-4 text-[4.5rem] font-bold leading-none tracking-[-0.07em] sm:text-[6rem]" aria-label={`${copy.planned} ${formatClock(remainingSeconds)}`}>{formatClock(remainingSeconds)}</h2>
+                  <p className="mt-3 max-w-[52ch] truncate text-sm font-medium text-[var(--muted-strong)]">{activeTaskTitle}</p>
                 </div>
-                <div className="flex flex-wrap justify-end gap-2">
+                <div className="flex flex-wrap justify-start gap-2 md:max-w-[220px] md:justify-end">
                   {!activeSession ? (
                     <button
-                      className="rounded-full bg-[var(--primary)] px-4 py-2 text-sm font-medium text-[var(--primary-foreground)]"
+                      className="inline-flex items-center justify-center gap-2 rounded-full bg-[var(--accent)] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_14px_30px_rgba(240,90,50,0.22)] disabled:bg-[var(--surface-soft)] disabled:text-[var(--muted)] disabled:shadow-none"
                       disabled={!canStartFocus}
                       onClick={() => void startFocus(effectiveTaskId ?? null, focusIntention, customPlannedSeconds).then(() => setFocusIntention(""))}
                     >
@@ -551,14 +576,14 @@ export default function Home() {
                     </button>
                   ) : activeSession.status === "paused" ? (
                     <button
-                      className="rounded-full bg-[var(--primary)] px-4 py-2 text-sm font-medium text-[var(--primary-foreground)]"
+                      className="rounded-full bg-[var(--accent)] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_14px_30px_rgba(240,90,50,0.22)]"
                       onClick={() => void resumeSession()}
                     >
                       {copy.resume}
                     </button>
                   ) : activeSession.status === "running" ? (
                     <button
-                      className="rounded-full bg-[var(--primary)] px-4 py-2 text-sm font-medium text-[var(--primary-foreground)]"
+                      className="rounded-full bg-[var(--accent)] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_14px_30px_rgba(240,90,50,0.22)]"
                       onClick={() => void pauseSession()}
                     >
                       {copy.pause}
@@ -566,7 +591,7 @@ export default function Home() {
                   ) : null}
                   {activeSession && activeSession.status !== "finishing" ? (
                     <button
-                      className="rounded-full border border-[var(--border)] px-4 py-2 text-sm font-medium text-[var(--muted)]"
+                      className="rounded-full border border-[var(--border)] px-4 py-2.5 text-sm font-semibold text-[var(--muted-strong)]"
                       onClick={() => void requestFinish()}
                     >
                       {copy.finish}
@@ -574,7 +599,7 @@ export default function Home() {
                   ) : null}
                   {activeSession ? (
                     <button
-                      className="rounded-full border border-[var(--border)] px-4 py-2 text-sm font-medium text-[var(--muted)]"
+                      className="rounded-full border border-[var(--border)] px-4 py-2.5 text-sm font-semibold text-[var(--muted)]"
                       onClick={() => void discardSession()}
                     >
                       {copy.discard}
@@ -582,109 +607,104 @@ export default function Home() {
                   ) : null}
                 </div>
               </div>
-              <div className="mt-6 grid gap-3 sm:grid-cols-3">
-                {[
-                  [copy.task, activeTaskTitle],
-                  [copy.state, activeSession?.status ?? copy.idle],
-                  [copy.planned, `${(activeSession?.plannedSeconds ?? previewPlannedSeconds) / 60} min`],
-                ].map(([label, value]) => (
-                  <div key={label} className="rounded-2xl bg-[var(--surface-soft)] p-4">
-                    <p className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--muted)]">{label}</p>
-                    <p className="mt-2 text-sm font-medium text-[var(--muted-strong)]">{value}</p>
-                  </div>
-                ))}
+              <div className="grid gap-3 border-y border-[var(--border-subtle)] px-6 py-4 sm:grid-cols-3">
+                <MetricCard label={copy.task} value={activeTaskTitle} tone="accent" />
+                <MetricCard label={copy.state} value={activeSession?.status ?? copy.idle} />
+                <MetricCard label={copy.planned} value={`${(activeSession?.plannedSeconds ?? previewPlannedSeconds) / 60} min`} />
               </div>
-              <div className="mt-4">
-                <label className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--muted)]" htmlFor="task-attribution">
-                  {copy.actualAttribution}
-                </label>
-                <select
-                  id="task-attribution"
-                  value={effectiveTaskId ?? ""}
-                  onChange={(event) => setSelectedTaskId(event.target.value || null)}
-                  className="mt-2 w-full rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm outline-none"
-                >
-                  {activeSessionHasArchivedAttribution && activeSession?.taskId ? (
-                    <option value={activeSession.taskId} disabled>
-                      {`${copy.currentArchivedAttribution}: ${activeSession.taskPathSnapshot ?? activeTask?.title ?? copy.unknownTask}`}
-                    </option>
-                  ) : null}
-                  <option value="">{copy.unassigned}</option>
-                  {activeTaskRows.map(({ task, depth }) => (
-                    <option key={task.id} value={task.id}>
-                      {`${"— ".repeat(depth)}${task.title}`}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              {!activeSession ? (
-                <div className="mt-4 grid gap-4 md:grid-cols-[1fr_160px]">
-                  <div>
-                    <label className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--muted)]" htmlFor="focus-intention">
-                      {copy.intentionLabel}
-                    </label>
-                    <input
-                      id="focus-intention"
-                      value={focusIntention}
-                      onChange={(event) => setFocusIntention(event.target.value)}
-                      className="mt-2 w-full rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm outline-none placeholder:text-[var(--placeholder)]"
-                      placeholder={copy.intentionPlaceholder}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--muted)]" htmlFor="planned-minutes">
-                      {copy.focusMinutes}
-                    </label>
-                    <input
-                      id="planned-minutes"
-                      inputMode="numeric"
-                      min={1}
-                      max={240}
-                      type="number"
-                      value={plannedMinutes}
-                      onChange={(event) => setPlannedMinutes(event.target.value)}
-                      className="mt-2 w-full rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm outline-none placeholder:text-[var(--placeholder)]"
-                      placeholder={String(settings.defaultFocusSeconds / 60)}
-                    />
-                  </div>
+              <div className="grid gap-4 p-6">
+                <div>
+                  <label className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]" htmlFor="task-attribution">
+                    {copy.actualAttribution}
+                  </label>
+                  <select
+                    id="task-attribution"
+                    value={effectiveTaskId ?? ""}
+                    onChange={(event) => setSelectedTaskId(event.target.value || null)}
+                    className="mt-2 w-full rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm font-medium outline-none"
+                  >
+                    {activeSessionHasArchivedAttribution && activeSession?.taskId ? (
+                      <option value={activeSession.taskId} disabled>
+                        {`${copy.currentArchivedAttribution}: ${activeSession.taskPathSnapshot ?? activeTask?.title ?? copy.unknownTask}`}
+                      </option>
+                    ) : null}
+                    <option value="">{copy.unassigned}</option>
+                    {activeTaskRows.map(({ task, depth }) => (
+                      <option key={task.id} value={task.id}>
+                        {`${"— ".repeat(depth)}${task.title}`}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-              ) : null}
-              {activeSession?.status === "finishing" ? (
-                <div className="mt-5 rounded-2xl border border-[var(--warning-border)] bg-[var(--warning-bg)] p-4">
-                  <p className="text-sm font-semibold text-[var(--warning-text)]">{copy.finishSession}</p>
-                  <textarea
-                    value={summary}
-                    onChange={(event) => setSummary(event.target.value)}
-                    className="mt-3 min-h-24 w-full resize-none rounded-2xl border border-[var(--warning-border)] bg-[var(--surface)] p-3 text-sm outline-none placeholder:text-[var(--placeholder)]"
-                    placeholder={copy.summaryPlaceholder}
-                  />
-                  {canMarkSelectedTaskDone ? (
-                    <label className="mt-3 flex items-center justify-between gap-4 rounded-2xl bg-[var(--surface)] px-3 py-2 text-sm text-[var(--warning-text)]">
-                      <span>{copy.markAttributedDone}</span>
+                {!activeSession ? (
+                  <div className="grid gap-4 md:grid-cols-[1fr_160px]">
+                    <div>
+                      <label className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]" htmlFor="focus-intention">
+                        {copy.intentionLabel}
+                      </label>
                       <input
-                        type="checkbox"
-                        checked={markTaskDone}
-                        onChange={(event) => setMarkTaskDone(event.target.checked)}
-                        className="h-5 w-5 accent-[var(--primary)]"
+                        id="focus-intention"
+                        value={focusIntention}
+                        onChange={(event) => setFocusIntention(event.target.value)}
+                        className="mt-2 w-full rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm font-medium outline-none placeholder:text-[var(--placeholder)]"
+                        placeholder={copy.intentionPlaceholder}
                       />
-                    </label>
-                  ) : null}
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <button
-                      className="rounded-full bg-[var(--primary)] px-4 py-2 text-sm font-medium text-[var(--primary-foreground)]"
-                      onClick={() => void saveFinish({ status: "completed", summary, taskId: finishTaskId, markTaskDone }).then(() => { setSummary(""); setSelectedTaskId(undefined); setMarkTaskDone(false); })}
-                    >
-                      {copy.saveCompleted}
-                    </button>
-                    <button
-                      className="rounded-full border border-[var(--border)] px-4 py-2 text-sm font-medium"
-                      onClick={() => void saveFinish({ status: "partial", summary, taskId: finishTaskId, markTaskDone }).then(() => { setSummary(""); setSelectedTaskId(undefined); setMarkTaskDone(false); })}
-                    >
-                      {copy.savePartial}
-                    </button>
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]" htmlFor="planned-minutes">
+                        {copy.focusMinutes}
+                      </label>
+                      <input
+                        id="planned-minutes"
+                        inputMode="numeric"
+                        min={1}
+                        max={240}
+                        type="number"
+                        value={plannedMinutes}
+                        onChange={(event) => setPlannedMinutes(event.target.value)}
+                        className="mt-2 w-full rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm font-medium outline-none placeholder:text-[var(--placeholder)]"
+                        placeholder={String(settings.defaultFocusSeconds / 60)}
+                      />
+                    </div>
                   </div>
-                </div>
-              ) : null}
+                ) : null}
+                {activeSession?.status === "finishing" ? (
+                  <div className="rounded-2xl border border-[var(--warning-border)] bg-[var(--warning-bg)] p-4">
+                    <p className="text-sm font-semibold text-[var(--warning-text)]">{copy.finishSession}</p>
+                    <textarea
+                      value={summary}
+                      onChange={(event) => setSummary(event.target.value)}
+                      className="mt-3 min-h-24 w-full resize-none rounded-2xl border border-[var(--warning-border)] bg-[var(--surface)] p-3 text-sm outline-none placeholder:text-[var(--placeholder)]"
+                      placeholder={copy.summaryPlaceholder}
+                    />
+                    {canMarkSelectedTaskDone ? (
+                      <label className="mt-3 flex items-center justify-between gap-4 rounded-2xl bg-[var(--surface)] px-3 py-2 text-sm text-[var(--warning-text)]">
+                        <span>{copy.markAttributedDone}</span>
+                        <input
+                          type="checkbox"
+                          checked={markTaskDone}
+                          onChange={(event) => setMarkTaskDone(event.target.checked)}
+                          className="h-5 w-5 accent-[var(--primary)]"
+                        />
+                      </label>
+                    ) : null}
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        className="rounded-full bg-[var(--primary)] px-4 py-2 text-sm font-medium text-[var(--primary-foreground)]"
+                        onClick={() => void saveFinish({ status: "completed", summary, taskId: finishTaskId, markTaskDone }).then(() => { setSummary(""); setSelectedTaskId(undefined); setMarkTaskDone(false); })}
+                      >
+                        {copy.saveCompleted}
+                      </button>
+                      <button
+                        className="rounded-full border border-[var(--border)] px-4 py-2 text-sm font-medium"
+                        onClick={() => void saveFinish({ status: "partial", summary, taskId: finishTaskId, markTaskDone }).then(() => { setSummary(""); setSelectedTaskId(undefined); setMarkTaskDone(false); })}
+                      >
+                        {copy.savePartial}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
             </section>
 
             <div className="grid gap-6">
@@ -719,9 +739,7 @@ export default function Home() {
                 </form>
                 <div className="mt-5 overflow-visible rounded-2xl border border-[var(--border)]">
                   {visibleTaskRows.length === 0 ? (
-                    <div className="bg-[var(--surface-soft)] px-4 py-6 text-sm text-[var(--muted)]">
-                      {copy.noTasksYet}
-                    </div>
+                    <EmptyState icon={<Sprout size={20} strokeWidth={1.8} />} title={copy.noTasksYet} action={copy.addTaskPlaceholder} />
                   ) : (
                     <div>
                       {visibleTaskRows.map(({ task, depth, hasChildren }, rowIndex) => {
@@ -753,14 +771,14 @@ export default function Home() {
                                   {hasChildren ? (
                                     <button
                                       aria-label={isExpanded ? `${copy.toggleTaskHint}: ${task.title}` : `${copy.toggleTaskHint}: ${task.title}`}
-                                      className="rounded-md px-1 py-0.5 text-xs text-[var(--muted)] hover:bg-[var(--surface)]"
+                                      className="grid h-6 w-6 place-items-center rounded-md text-[var(--muted)] hover:bg-[var(--surface)]"
                                       onClick={() => toggleTaskExpansion(task.id)}
                                     >
-                                      {isExpanded ? "▾" : "▸"}
+                                      {isExpanded ? <ChevronDown size={15} strokeWidth={2.2} aria-hidden="true" /> : <ChevronRight size={15} strokeWidth={2.2} aria-hidden="true" />}
                                     </button>
                                   ) : isDone ? (
-                                    <span aria-hidden="true" className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--muted)] text-[10px] text-[var(--surface)]">
-                                      ✓
+                                    <span aria-hidden="true" className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--success)] text-[var(--surface)]">
+                                      <Check size={13} strokeWidth={3} />
                                     </span>
                                   ) : (
                                     <span aria-hidden="true" className="block h-5 w-5" />
@@ -781,7 +799,7 @@ export default function Home() {
                                   </span>
                                 ) : null}
                                 <span className="whitespace-nowrap text-xs text-[var(--muted)]">
-                                  {stats?.completedCount ?? 0} 🍅 · {formatDuration(stats?.totalFocusSeconds ?? 0)}
+                                  <Timer size={13} strokeWidth={1.8} aria-hidden="true" /> {stats?.completedCount ?? 0} · {formatDuration(stats?.totalFocusSeconds ?? 0)}
                                 </span>
                               </div>
                               <div className="ml-auto flex shrink-0 items-center gap-2">
@@ -816,7 +834,7 @@ export default function Home() {
                                     aria-label={`${copy.settings}: ${task.title}`}
                                     className="list-none rounded-full border border-[var(--border)] px-2.5 py-1.5 text-xs font-medium text-[var(--muted)] hover:bg-[var(--surface-soft)] [&::-webkit-details-marker]:hidden"
                                   >
-                                    ...
+                                    <MoreHorizontal size={16} strokeWidth={2} aria-hidden="true" />
                                   </summary>
                                   <div className="absolute right-0 z-50 mt-2 min-w-36 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-1 shadow-lg">
                                     <button
@@ -847,7 +865,7 @@ export default function Home() {
                                         void archiveTask(task.id);
                                       }}
                                     >
-                                      Archive
+                                      {copy.archive}
                                     </button>
                                   </div>
                                 </details>
@@ -867,10 +885,10 @@ export default function Home() {
                                     value={subtaskTitle}
                                     onChange={(event) => setSubtaskTitle(event.target.value)}
                                     className="min-w-0 flex-1 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 outline-none"
-                                    placeholder={`Add a subtask under ${task.title}`}
+                                    placeholder={`${copy.addSubtask}: ${task.title}`}
                                   />
                                   <button className="rounded-xl bg-[var(--primary)] px-3 py-2 text-xs font-medium whitespace-nowrap text-[var(--primary-foreground)]">
-                                    Add subtask
+                                    {copy.addSubtask}
                                   </button>
                                   <button
                                     type="button"
@@ -935,7 +953,7 @@ export default function Home() {
                   )}
                 </div>
                 <div className="mt-4 flex flex-wrap gap-4 text-xs text-[var(--muted)]">
-                  <span>🍅 = {copy.completedPomodoros}</span>
+                  <span className="inline-flex items-center gap-1.5"><Timer size={13} strokeWidth={1.8} aria-hidden="true" /> = {copy.completedPomodoros}</span>
                   <span>•</span>
                   <span>{copy.toggleTaskHint}</span>
                   <span>•</span>
@@ -946,7 +964,7 @@ export default function Home() {
               <section className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_1px_0_var(--shadow-line)]">
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
-                    <span aria-hidden="true" className="text-base">📦</span>
+                    <Archive size={18} strokeWidth={1.8} className="text-[var(--muted)]" aria-hidden="true" />
                     <h3 className="text-lg font-semibold tracking-tight">{copy.archivedTasks}</h3>
                     <span className="rounded-full bg-[var(--surface-soft)] px-2.5 py-1 text-xs font-medium text-[var(--muted)]">
                       {archivedBranchRoots.length}
@@ -957,12 +975,12 @@ export default function Home() {
                     className="rounded-full px-2 py-1 text-base leading-none text-[var(--muted)] hover:bg-[var(--surface-soft)]"
                     onClick={() => setShowArchivedTasks((current) => !current)}
                   >
-                    {showArchivedTasks ? "⌄" : "⌃"}
+                    {showArchivedTasks ? <ChevronDown size={18} strokeWidth={2} aria-hidden="true" /> : <ChevronRight size={18} strokeWidth={2} aria-hidden="true" />}
                   </button>
                 </div>
                 {showArchivedTasks ? (
                   archivedBranchRoots.length === 0 ? (
-                    <p className="mt-4 rounded-2xl bg-[var(--surface-soft)] px-4 py-3 text-sm text-[var(--muted)]">{copy.noArchivedTasks}</p>
+                    <EmptyState icon={<Archive size={20} strokeWidth={1.8} />} title={copy.noArchivedTasks} />
                   ) : (
                     <div className="mt-4 overflow-visible rounded-2xl border border-[var(--border)]">
                       {archivedBranchRoots.map((task, index) => {
@@ -976,11 +994,11 @@ export default function Home() {
                           >
                             <div className="flex items-center justify-between gap-3">
                               <div className="flex min-w-0 items-center gap-3">
-                                <span aria-hidden="true" className="text-base text-[var(--muted)]">📦</span>
+                                <Archive size={17} strokeWidth={1.8} className="text-[var(--muted)]" aria-hidden="true" />
                                 <div className="min-w-0">
                                   <p className="truncate text-sm font-medium">{task.title}</p>
                                   <p className="mt-1 text-xs text-[var(--muted)]">
-                                    {stats?.completedCount ?? 0} 🍅 · {formatDuration(stats?.totalFocusSeconds ?? 0)}
+                                    <Timer size={13} strokeWidth={1.8} aria-hidden="true" /> {stats?.completedCount ?? 0} · {formatDuration(stats?.totalFocusSeconds ?? 0)}
                                   </p>
                                 </div>
                               </div>
@@ -996,7 +1014,7 @@ export default function Home() {
                                     aria-label={`${copy.settings}: ${task.title}`}
                                     className="list-none rounded-full border border-[var(--border)] px-2.5 py-1.5 text-xs font-medium text-[var(--muted)] hover:bg-[var(--surface-soft)] [&::-webkit-details-marker]:hidden"
                                   >
-                                    ...
+                                    <MoreHorizontal size={16} strokeWidth={2} aria-hidden="true" />
                                   </summary>
                                   <div className="absolute right-0 z-50 mt-2 min-w-36 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-1 shadow-lg">
                                     <button
@@ -1039,7 +1057,7 @@ export default function Home() {
                 <div className="mt-5 space-y-3">
                   <p className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--muted)]">{copy.recentSessions}</p>
                   {recentSessions.length === 0 ? (
-                    <p className="rounded-2xl bg-[var(--surface-soft)] px-4 py-3 text-sm text-[var(--muted)]">{copy.noCompletedSessions}</p>
+                    <EmptyState icon={<Timer size={20} strokeWidth={1.8} />} title={copy.noCompletedSessions} action={copy.currentFocus} />
                   ) : (
                     recentSessions.map((session) => (
                       <article
