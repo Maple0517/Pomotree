@@ -23,6 +23,7 @@ type MenubarCopy = {
   appSettings: string;
   attribution: string;
   back: string;
+  capturePlaceholder: string;
   custom: string;
   dashboard: string;
   defaultFocus: string;
@@ -43,12 +44,16 @@ type MenubarCopy = {
   themeHelp: string;
   noActiveSession: string;
   noGoal: string;
+  pausedStatus: string;
   pause: string;
   quickCapture: string;
   ready: string;
+  recentFocus: string;
   recorded: string;
   resume: string;
   saveCompleted: string;
+  saveCapture: string;
+  savePartial: string;
   saved: string;
   settingsHint: string;
   startFocus: string;
@@ -68,6 +73,7 @@ const TEXT: Record<AppLanguage, MenubarCopy> = {
     appSettings: "Settings",
     attribution: "Attribution",
     back: "Back",
+    capturePlaceholder: "Something on your mind?",
     custom: "Custom",
     dashboard: "Open Dashboard",
     defaultFocus: "Default focus",
@@ -88,12 +94,16 @@ const TEXT: Record<AppLanguage, MenubarCopy> = {
     themeHelp: "Choose light, dark, or follow your system setting.",
     noActiveSession: "No active session",
     noGoal: "No goal written",
+    pausedStatus: "Paused",
     pause: "Pause",
     quickCapture: "Quick capture",
     ready: "Ready to focus",
+    recentFocus: "Recent focus",
     recorded: "Recorded:",
     resume: "Resume",
     saveCompleted: "Save Completed",
+    saveCapture: "Save capture",
+    savePartial: "Save Partial",
     saved: "Saved",
     settingsHint: "Settings are saved locally on this device.",
     startFocus: "Start Focus",
@@ -111,6 +121,7 @@ const TEXT: Record<AppLanguage, MenubarCopy> = {
     appSettings: "设置",
     attribution: "归属任务",
     back: "返回",
+    capturePlaceholder: "突然想到什么？",
     custom: "自定义",
     dashboard: "打开 Dashboard",
     defaultFocus: "默认专注时长",
@@ -131,12 +142,16 @@ const TEXT: Record<AppLanguage, MenubarCopy> = {
     themeHelp: "选择日间、夜间，或跟随系统设置。",
     noActiveSession: "当前没有专注",
     noGoal: "未填写目标",
+    pausedStatus: "已暂停",
     pause: "暂停",
     quickCapture: "快速记录",
     ready: "准备开始专注",
+    recentFocus: "最近专注",
     recorded: "已记录：",
     resume: "继续",
     saveCompleted: "保存完成",
+    saveCapture: "保存记录",
+    savePartial: "保存部分完成",
     saved: "已保存",
     settingsHint: "设置会保存在本机。",
     startFocus: "开始专注",
@@ -312,6 +327,7 @@ function IdleStartForm({
   const [durationPreset, setDurationPreset] = useState<DurationPreset>(defaultFocusSeconds === 3000 ? 50 : 25);
   const [customMinutes, setCustomMinutes] = useState(String(Math.max(1, Math.round(defaultFocusSeconds / 60))));
   const activeTasks = useMemo(() => tasks.filter((task) => task.status !== "archived" && task.status !== "done"), [tasks]);
+  const quickTasks = activeTasks.slice(0, 2);
   const plannedSeconds = durationPreset === "custom" ? Math.max(1, Number(customMinutes) || 1) * 60 : durationPreset * 60;
   const canStart = Boolean(intention.trim() || selectedTaskId);
 
@@ -324,6 +340,11 @@ function IdleStartForm({
     const nextTaskId = value || null;
     setSelectedTaskId(nextTaskId);
     onCanStartChange(Boolean(intention.trim() || nextTaskId));
+  };
+
+  const selectQuickTask = (taskId: string) => {
+    setSelectedTaskId(taskId);
+    onCanStartChange(true);
   };
 
   const submit = async (event?: FormEvent) => {
@@ -399,10 +420,36 @@ function IdleStartForm({
         ) : null}
       </div>
 
-      <div className="flex items-center gap-3 rounded-[9px] border border-[var(--menubar-border)] bg-[var(--menubar-soft)] px-4 py-3 text-[14px] leading-5 text-[var(--menubar-muted-strong)]">
-        <Lightbulb size={22} strokeWidth={1.7} className="shrink-0 text-[var(--menubar-muted)]" />
-        <p>{copy.tip}</p>
-      </div>
+      {quickTasks.length ? (
+        <div className="grid gap-2">
+          <p className="text-[13px] font-bold text-[var(--menubar-muted)]">{copy.recentFocus}</p>
+          <div className="grid gap-2">
+            {quickTasks.map((task) => {
+              const selected = selectedTaskId === task.id;
+              return (
+                <button
+                  key={task.id}
+                  type="button"
+                  onClick={() => selectQuickTask(task.id)}
+                  className={`menubar-button flex h-10 min-w-0 items-center justify-between rounded-[9px] border px-3 text-left text-[14px] font-semibold ${
+                    selected
+                      ? "border-[var(--menubar-selected-bg)] bg-[var(--menubar-selected-bg)] text-[var(--menubar-selected-text)]"
+                      : "border-[var(--menubar-border)] bg-[var(--menubar-soft)] text-[var(--menubar-muted-strong)]"
+                  }`}
+                >
+                  <span className="truncate">{taskPath(tasks, task.id) ?? task.title}</span>
+                  {selected ? <Check size={16} strokeWidth={2.4} className="shrink-0" /> : null}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center gap-3 rounded-[9px] border border-[var(--menubar-border)] bg-[var(--menubar-soft)] px-4 py-3 text-[14px] leading-5 text-[var(--menubar-muted-strong)]">
+          <Lightbulb size={22} strokeWidth={1.7} className="shrink-0 text-[var(--menubar-muted)]" />
+          <p>{copy.tip}</p>
+        </div>
+      )}
     </form>
   );
 }
@@ -421,7 +468,7 @@ function ContextBlock({ copy, session, tasks }: { copy: MenubarCopy; session: Fo
   );
 }
 
-function MenubarInterruptionInput({ copy, disabled, onSave }: { copy: MenubarCopy; disabled?: boolean; onSave: (text: string) => Promise<void> }) {
+function MenubarInterruptionInput({ copy, disabled, onSave, showFlowHint = true }: { copy: MenubarCopy; disabled?: boolean; onSave: (text: string) => Promise<void>; showFlowHint?: boolean }) {
   const [draft, setDraft] = useState("");
   const [savedText, setSavedText] = useState<string | null>(null);
 
@@ -456,23 +503,30 @@ function MenubarInterruptionInput({ copy, disabled, onSave }: { copy: MenubarCop
               void save();
             }
           }}
-          className="h-[78px] w-full rounded-[9px] border border-[var(--menubar-border-strong)] bg-transparent px-4 pr-[76px] text-[16px] font-medium outline-none placeholder:text-[var(--menubar-placeholder)] disabled:opacity-50"
-          placeholder={copy.language === "Language" ? "Something on your mind? Enter to save" : "突然想到什么？Enter 保存"}
+          className="h-[52px] w-full rounded-[9px] border border-[var(--menubar-border-strong)] bg-transparent px-4 pr-12 text-[16px] font-medium outline-none placeholder:text-[var(--menubar-placeholder)] disabled:opacity-50"
+          placeholder={copy.capturePlaceholder}
         />
-        {savedText ? (
-          <span className="absolute right-4 top-1/2 inline-flex -translate-y-1/2 items-center gap-1 text-[12px] font-semibold text-[#52d348]">
-            <CheckCircle2 size={16} /> {copy.saved}
-          </span>
-        ) : null}
+        <button
+          type="button"
+          disabled={disabled || !draft.trim()}
+          onClick={() => void save()}
+          aria-label={copy.saveCapture}
+          className="menubar-button absolute right-2 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full bg-[var(--menubar-selected-bg)] text-[var(--menubar-selected-text)] disabled:bg-transparent disabled:text-[var(--menubar-muted)]"
+        >
+          <Check size={16} strokeWidth={2.4} />
+        </button>
       </div>
       {savedText ? (
-        <p className="flex items-center gap-2 text-[14px] font-semibold text-[var(--menubar-muted-strong)]">
-          <CheckCircle2 size={19} className="text-[#52d348]" /> {copy.recorded} {savedText}
+        <p className="flex min-w-0 items-center gap-2 text-[14px] font-semibold text-[var(--menubar-muted-strong)]">
+          <CheckCircle2 size={19} className="shrink-0 text-[#52d348]" />
+          <span className="truncate">{copy.recorded} {savedText}</span>
         </p>
       ) : null}
-      <p className="flex items-center gap-2 rounded-[8px] bg-[var(--menubar-soft)] px-4 py-2.5 text-[13px] font-semibold text-[var(--menubar-muted)]">
-        <Circle size={15} /> {copy.tipAfterCapture}
-      </p>
+      {showFlowHint ? (
+        <p className="flex items-center gap-2 rounded-[8px] bg-[var(--menubar-soft)] px-4 py-2.5 text-[13px] font-semibold text-[var(--menubar-muted)]">
+          <Circle size={15} /> {copy.tipAfterCapture}
+        </p>
+      ) : null}
     </section>
   );
 }
@@ -488,9 +542,9 @@ function RunningStage({ copy, session, tasks, busy, onInterruption }: { copy: Me
 
 function PausedStage({ copy, session, tasks, busy, onInterruption }: { copy: MenubarCopy; session: FocusSession; tasks: Task[]; busy: boolean; onInterruption: (text: string) => Promise<void> }) {
   return (
-    <div className="grid gap-[22px]">
+    <div className="grid gap-[18px]">
       <ContextBlock copy={copy} session={session} tasks={tasks} />
-      <MenubarInterruptionInput copy={copy} disabled={busy} onSave={onInterruption} />
+      <MenubarInterruptionInput copy={copy} disabled={busy} onSave={onInterruption} showFlowHint={false} />
     </div>
   );
 }
@@ -630,8 +684,37 @@ function ActionBar({
 
   if (mode === "finishing") {
     return (
-      <div className="relative z-10 px-5 pb-[22px] pt-1">
-        <PrimaryButton type="submit" form={MENUBAR_FORMS.finish} name="status" value="completed" disabled={busy}>{copy.saveCompleted}</PrimaryButton>
+      <div className="relative z-10 grid gap-2 px-5 pb-[12px] pt-1">
+        <button
+          type="submit"
+          form={MENUBAR_FORMS.finish}
+          name="status"
+          value="completed"
+          disabled={busy}
+          className="menubar-button h-12 w-full rounded-[10px] bg-[#17191c] px-4 text-[16px] font-semibold text-white shadow-[0_10px_24px_rgba(17,19,21,0.16)] disabled:bg-[var(--menubar-soft)] disabled:text-[var(--menubar-muted)]"
+        >
+          {copy.saveCompleted}
+        </button>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="submit"
+            form={MENUBAR_FORMS.finish}
+            name="status"
+            value="partial"
+            disabled={busy}
+            className="menubar-button h-11 rounded-[10px] border border-[var(--menubar-border-strong)] bg-transparent px-3 text-[15px] font-semibold text-[var(--menubar-text)] disabled:opacity-75"
+          >
+            {copy.savePartial}
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onDiscard}
+            className="menubar-button h-11 rounded-[10px] border border-[var(--menubar-border-strong)] bg-transparent px-3 text-[15px] font-semibold text-[var(--menubar-text)] disabled:opacity-75"
+          >
+            {copy.discard}
+          </button>
+        </div>
       </div>
     );
   }
@@ -669,7 +752,10 @@ function MenubarHeader({ activeSession, copy, onSettings, remainingSeconds }: { 
     <header className="flex items-start justify-between gap-3 px-5 pt-[22px]">
       <div className="flex min-w-0 items-center gap-3">
         <span className="grid h-11 w-11 place-items-center rounded-full bg-[var(--menubar-soft)] text-[var(--menubar-muted-strong)]" aria-hidden="true">{isPaused ? <Pause size={22} fill="currentColor" /> : <Timer size={24} strokeWidth={2.2} />}</span>
-        <h1 className="text-[38px] font-bold leading-none tracking-[-0.04em] text-[var(--menubar-text)]">{isPaused ? `${formatClock(remainingSeconds)} ${copy.pause.toLowerCase()}` : formatClock(remainingSeconds)}</h1>
+        <div className="min-w-0">
+          <h1 className="text-[38px] font-bold leading-none tracking-[-0.04em] text-[var(--menubar-text)]">{formatClock(remainingSeconds)}</h1>
+          {isPaused ? <p className="mt-1 text-[13px] font-bold text-[var(--menubar-muted)]">{copy.pausedStatus}</p> : null}
+        </div>
       </div>
       <SettingsButton copy={copy} onClick={onSettings} />
     </header>
@@ -962,9 +1048,11 @@ export function MenubarApp() {
           />
         ) : null}
 
-        <div className="overflow-hidden rounded-b-[32px] border-t border-[var(--menubar-border)]">
-          <OpenDashboardButton copy={copy} />
-        </div>
+        {view === "focus" ? (
+          <div className="overflow-hidden rounded-b-[32px] border-t border-[var(--menubar-border)]">
+            <OpenDashboardButton copy={copy} />
+          </div>
+        ) : null}
       </section>
     </main>
   );
