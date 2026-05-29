@@ -1,3 +1,4 @@
+use std::time::Duration;
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
@@ -13,6 +14,9 @@ const OPEN_DASHBOARD_MENU_ID: &str = "open_dashboard";
 const QUIT_MENU_ID: &str = "quit";
 const WINDOW_MARGIN: i32 = 12;
 const TRAY_VERTICAL_GAP: i32 = 6;
+const FOCUS_COMPLETE_SOUND_REPEATS: u8 = 4;
+const FOCUS_COMPLETE_SOUND_GAP_MS: u64 = 140;
+const FOCUS_COMPLETE_SOUND_PATH: &str = "/System/Library/Sounds/Glass.aiff";
 
 #[derive(Clone, Copy)]
 struct TrayAnchor {
@@ -205,7 +209,7 @@ fn play_focus_complete_sound() -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
         std::process::Command::new("afplay")
-            .arg("/System/Library/Sounds/Glass.aiff")
+            .arg(FOCUS_COMPLETE_SOUND_PATH)
             .spawn()
             .map(|_| ())
             .map_err(|error| error.to_string())
@@ -215,6 +219,33 @@ fn play_focus_complete_sound() -> Result<(), String> {
     {
         Ok(())
     }
+}
+
+#[tauri::command]
+fn present_focus_complete_alert(app: AppHandle) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        std::thread::spawn(move || {
+            for index in 0..FOCUS_COMPLETE_SOUND_REPEATS {
+                let _ = std::process::Command::new("afplay")
+                    .arg(FOCUS_COMPLETE_SOUND_PATH)
+                    .status();
+
+                if index + 1 < FOCUS_COMPLETE_SOUND_REPEATS {
+                    std::thread::sleep(Duration::from_millis(FOCUS_COMPLETE_SOUND_GAP_MS));
+                }
+            }
+
+            show_main_window(&app);
+        });
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        show_main_window(&app);
+    }
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -237,6 +268,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             open_dashboard,
             play_focus_complete_sound,
+            present_focus_complete_alert,
             set_menubar_status
         ])
         .setup(|app| {

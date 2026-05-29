@@ -941,7 +941,7 @@ export function MenubarApp() {
     if (activeSession?.status === "running" && remainingSeconds <= 0) {
       if (lastCompletionSoundSessionRef.current !== activeSession.id) {
         lastCompletionSoundSessionRef.current = activeSession.id;
-        invokeTauriCommand("play_focus_complete_sound");
+        invokeTauriCommand("present_focus_complete_alert");
       }
 
       void expireRunningSession(activeSession.id);
