@@ -336,7 +336,7 @@ function IdleStartForm({
   const [selectedTaskId, setSelectedTaskId] = useState<string | null | undefined>(undefined);
   const [durationPreset, setDurationPreset] = useState<DurationPreset>(defaultFocusSeconds === 3000 ? 50 : 25);
   const [customMinutes, setCustomMinutes] = useState(String(Math.max(1, Math.round(defaultFocusSeconds / 60))));
-  const activeTasks = useMemo(() => tasks.filter((task) => task.status !== "archived" && task.status !== "done"), [tasks]);
+  const activeTasks = useMemo(() => tasks.filter((task) => task.status !== "archived"), [tasks]);
   const quickTasks = activeTasks.slice(0, 2);
   const effectiveTaskId = selectedTaskId === undefined ? defaultTaskId : selectedTaskId;
   const plannedSeconds = durationPreset === "custom" ? Math.max(1, Number(customMinutes) || 1) * 60 : durationPreset * 60;
@@ -577,7 +577,7 @@ function FinishForm({
 }) {
   const [summary, setSummary] = useState("");
   const [selectedTaskId, setSelectedTaskId] = useState<string | null | undefined>(undefined);
-  const activeTasks = useMemo(() => tasks.filter((task) => task.status !== "archived" && task.status !== "done"), [tasks]);
+  const activeTasks = useMemo(() => tasks.filter((task) => task.status !== "archived"), [tasks]);
   const currentTaskPath = session.taskPathSnapshot ?? taskPath(tasks, session.taskId);
   const effectiveTaskId = selectedTaskId === undefined ? session.taskId : selectedTaskId;
   const summaryLength = summary.length;
@@ -943,7 +943,7 @@ export function MenubarApp() {
   }, []);
 
   const activeSession = sessions.find((session) => ["running", "paused", "finishing"].includes(session.status));
-  const activeTasks = useMemo(() => tasks.filter((task) => task.status !== "archived" && task.status !== "done"), [tasks]);
+  const activeTasks = useMemo(() => tasks.filter((task) => task.status !== "archived"), [tasks]);
   const defaultTaskId = useMemo(() => lastActiveSessionTaskId(sessions, activeTasks), [activeTasks, sessions]);
   const mode = menubarMode(activeSession);
   const remainingSeconds = activeSession ? computeRemainingSeconds(activeSession, pauses, now) : settings.defaultFocusSeconds;
