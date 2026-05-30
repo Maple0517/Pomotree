@@ -22,7 +22,10 @@ type TimelineCopy = {
 };
 
 const DAY_SECONDS = 24 * 60 * 60;
-const TIMELINE_HEIGHT_PX = 900;
+const BASE_TIMELINE_HEIGHT_PX = 900;
+const MIN_TIMELINE_SCALE = 0.75;
+const MAX_TIMELINE_SCALE = 2.5;
+const TIMELINE_SCALE_STEP = 0.25;
 const SESSION_CARD_HEIGHT_PX = 58;
 const SESSION_GROUP_ROW_HEIGHT_PX = 38;
 const SESSION_GROUP_PADDING_PX = 16;
@@ -153,16 +156,20 @@ function groupHeight(sessionCount: number) {
     : SESSION_GROUP_PADDING_PX + sessionCount * SESSION_GROUP_ROW_HEIGHT_PX;
 }
 
-function projectedTop(seconds: number) {
-  return (seconds / DAY_SECONDS) * TIMELINE_HEIGHT_PX;
+function clampTimelineScale(scale: number) {
+  return Math.min(MAX_TIMELINE_SCALE, Math.max(MIN_TIMELINE_SCALE, scale));
 }
 
-function groupTimelineSessions(sessions: TimelineSession[]): TimelineSessionGroup[] {
+function projectedTop(seconds: number, timelineHeight: number) {
+  return (seconds / DAY_SECONDS) * timelineHeight;
+}
+
+function groupTimelineSessions(sessions: TimelineSession[], timelineHeight: number): TimelineSessionGroup[] {
   const groups: TimelineSessionGroup[] = [];
 
   for (const session of sessions) {
     const latestGroup = groups.at(-1);
-    const sessionTop = projectedTop(session.startSeconds);
+    const sessionTop = projectedTop(session.startSeconds, timelineHeight);
 
     if (!latestGroup || sessionTop >= latestGroup.layoutTopPx + latestGroup.heightPx + SESSION_CARD_GAP_PX) {
       groups.push({
@@ -185,7 +192,7 @@ function groupTimelineSessions(sessions: TimelineSession[]): TimelineSessionGrou
 
   const positioned = groups.map((group) => ({
     ...group,
-    layoutTopPx: Math.min(TIMELINE_HEIGHT_PX - group.heightPx, Math.max(0, group.layoutTopPx)),
+    layoutTopPx: Math.min(timelineHeight - group.heightPx, Math.max(0, group.layoutTopPx)),
   }));
 
   for (let index = 1; index < positioned.length; index += 1) {
@@ -197,7 +204,7 @@ function groupTimelineSessions(sessions: TimelineSession[]): TimelineSessionGrou
   for (let index = positioned.length - 1; index >= 0; index -= 1) {
     const next = positioned[index + 1];
     const current = positioned[index];
-    const maxTop = TIMELINE_HEIGHT_PX - current.heightPx;
+    const maxTop = timelineHeight - current.heightPx;
     const upperBound = next ? next.layoutTopPx - current.heightPx - SESSION_CARD_GAP_PX : maxTop;
     current.layoutTopPx = Math.max(0, Math.min(current.layoutTopPx, upperBound));
   }
@@ -234,16 +241,24 @@ export function DailyFocusTimeline({
 }) {
   const [timelineDay, setTimelineDay] = useState(() => startOfLocalDay(new Date()));
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [timelineScale, setTimelineScale] = useState(1);
   const { timelineSessions, gaps } = useMemo(
     () => buildDailyTimeline(sessions, tasks, timelineDay, copy.unassigned),
     [copy.unassigned, sessions, tasks, timelineDay],
   );
-  const sessionGroups = useMemo(() => groupTimelineSessions(timelineSessions), [timelineSessions]);
+  const timelineHeight = Math.round(BASE_TIMELINE_HEIGHT_PX * timelineScale);
+  const sessionGroups = useMemo(() => groupTimelineSessions(timelineSessions, timelineHeight), [timelineHeight, timelineSessions]);
   const selectedSession = timelineSessions.find((session) => session.id === selectedSessionId) ?? timelineSessions[0] ?? null;
   const totalSeconds = timelineSessions.reduce((total, session) => total + session.displaySeconds, 0);
   const longestSeconds = timelineSessions.reduce((longest, session) => Math.max(longest, session.displaySeconds), 0);
   const hourMarks = Array.from({ length: 7 }, (_, index) => index * 4);
   const isToday = isSameLocalDay(timelineDay, new Date());
+  const scaleLabel = language === "zh" ? "比例" : "Scale";
+  const zoomOutLabel = language === "zh" ? "缩小时间线比例" : "Zoom timeline out";
+  const zoomInLabel = language === "zh" ? "放大时间线比例" : "Zoom timeline in";
+  const adjustTimelineScale = (delta: number) => {
+    setTimelineScale((current) => clampTimelineScale(Number((current + delta).toFixed(2))));
+  };
 
   return (
     <section className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[0_1px_0_var(--shadow-line)] sm:p-5">
@@ -293,11 +308,52 @@ export function DailyFocusTimeline({
         <TimelineMetric label={copy.longestSession} value={formatCompactDuration(longestSeconds)} tone="warm" />
       </div>
 
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-[1.35rem] bg-[var(--surface-soft)] px-3 py-2">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
+          {scaleLabel} · {Math.round(timelineScale * 100)}%
+        </p>
+        <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
+          <button
+            className="grid h-8 w-8 place-items-center rounded-full border border-[var(--border)] text-sm font-semibold text-[var(--muted-strong)] disabled:opacity-35"
+            aria-label={zoomOutLabel}
+            disabled={timelineScale <= MIN_TIMELINE_SCALE}
+            onClick={() => adjustTimelineScale(-TIMELINE_SCALE_STEP)}
+          >
+            −
+          </button>
+          <input
+            className="w-28 accent-[var(--accent)] sm:w-44"
+            type="range"
+            min={MIN_TIMELINE_SCALE}
+            max={MAX_TIMELINE_SCALE}
+            step={TIMELINE_SCALE_STEP}
+            value={timelineScale}
+            aria-label={scaleLabel}
+            onChange={(event) => setTimelineScale(clampTimelineScale(Number(event.target.value)))}
+          />
+          <button
+            className="grid h-8 w-8 place-items-center rounded-full border border-[var(--border)] text-sm font-semibold text-[var(--muted-strong)] disabled:opacity-35"
+            aria-label={zoomInLabel}
+            disabled={timelineScale >= MAX_TIMELINE_SCALE}
+            onClick={() => adjustTimelineScale(TIMELINE_SCALE_STEP)}
+          >
+            +
+          </button>
+        </div>
+      </div>
+
       <div className="mt-6 grid gap-5 2xl:grid-cols-[minmax(0,1fr)_minmax(220px,0.42fr)]">
-        <div className="relative min-h-[940px] overflow-hidden rounded-[1.6rem] border border-[var(--border-subtle)] bg-[linear-gradient(180deg,rgba(255,255,255,0.02),var(--surface-soft))] px-3 py-5 sm:px-5">
+        <div
+          className="relative max-h-[720px] min-h-[520px] overflow-y-auto rounded-[1.6rem] border border-[var(--border-subtle)] bg-[linear-gradient(180deg,rgba(255,255,255,0.02),var(--surface-soft))] px-3 py-5 sm:px-5"
+          onWheel={(event) => {
+            if (!event.metaKey && !event.ctrlKey) return;
+            event.preventDefault();
+            adjustTimelineScale(event.deltaY > 0 ? -0.05 : 0.05);
+          }}
+        >
           <div
             className="grid grid-cols-[3.2rem_1rem_minmax(0,1fr)] gap-3 sm:grid-cols-[4.2rem_1rem_minmax(0,1fr)]"
-            style={{ height: TIMELINE_HEIGHT_PX }}
+            style={{ height: timelineHeight }}
           >
             <div className="relative font-mono text-[11px] text-[var(--muted-strong)]">
               {hourMarks.map((hour) => (
