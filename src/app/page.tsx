@@ -459,7 +459,7 @@ export default function Home() {
   }, [sessions, tasks]);
   const recentSessions = sessions.filter((session) => ["completed", "partial"].includes(session.status)).slice(0, 5);
   const openInterruptions = interruptions.filter((interruption) => interruption.status === "open");
-  const canStartFocus = Boolean((effectiveTaskId && selectedTask?.status !== "done") || focusIntention.trim());
+  const canStartFocus = Boolean((effectiveTaskId && selectedTask?.status !== "archived") || focusIntention.trim());
 
   const editableParentOptions = useMemo(() => {
     if (!editingTaskId) return [];
