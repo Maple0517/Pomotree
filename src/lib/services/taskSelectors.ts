@@ -47,26 +47,43 @@ export function getTaskPathIds(tasks: Task[], taskId: string | null | undefined)
   return path;
 }
 
+export function getTaskIdsMatchingLabel(tasks: Task[], labelId: string | null) {
+  if (!labelId) return null;
+
+  const included = new Set<string>();
+  for (const task of tasks) {
+    if (!(task.labelIds ?? []).includes(labelId)) continue;
+    for (const pathId of getTaskPathIds(tasks, task.id)) {
+      included.add(pathId);
+    }
+  }
+  return included;
+}
+
 export function getTaskRows(
   tasks: Task[],
   options: {
     includeArchived?: boolean;
     expandedTaskIds?: Iterable<string>;
     defaultExpandedDepth?: number;
+    filterTaskIds?: Set<string> | null;
   } = {},
 ): TaskRow[] {
   const includeArchived = options.includeArchived ?? false;
   const expandedTaskIds = new Set(options.expandedTaskIds ?? []);
   const defaultExpandedDepth = options.defaultExpandedDepth ?? Number.POSITIVE_INFINITY;
+  const filterTaskIds = options.filterTaskIds ?? null;
   const byParent = getTaskChildrenMap(tasks, { includeArchived });
 
   const rows: TaskRow[] = [];
   const visit = (parentId: string | null, depth: number) => {
     const key = getTaskParentKey(parentId);
     for (const task of byParent.get(key) ?? []) {
-      const hasChildren = (byParent.get(getTaskParentKey(task.id))?.length ?? 0) > 0;
-      rows.push({ task, depth, hasChildren });
-      if (hasChildren && (expandedTaskIds.has(task.id) || depth <= defaultExpandedDepth)) {
+      if (filterTaskIds && !filterTaskIds.has(task.id)) continue;
+
+      const hasVisibleChildren = (byParent.get(getTaskParentKey(task.id)) ?? []).some((child) => !filterTaskIds || filterTaskIds.has(child.id));
+      rows.push({ task, depth, hasChildren: hasVisibleChildren });
+      if (hasVisibleChildren && (filterTaskIds || expandedTaskIds.has(task.id) || depth <= defaultExpandedDepth)) {
         visit(task.id, depth + 1);
       }
     }

@@ -220,8 +220,8 @@ export function mapSnapshotPayload(input: CloudSyncSnapshotInput) {
   };
 }
 
-export function assertPomotreeSnapshot(value: PomotreeExport) {
-  if (value.schemaVersion !== 1) throw new Error("Unsupported cloud snapshot schema version");
+export function assertPomotreeSnapshot(value: PomotreeExport | { schemaVersion: number; tasks?: unknown; focusSessions?: unknown; timerPauses?: unknown; interruptions?: unknown; userSettings?: unknown }) {
+  if (value.schemaVersion !== 1 && value.schemaVersion !== 2) throw new Error("Unsupported cloud snapshot schema version");
   if (!Array.isArray(value.tasks)) throw new Error("Cloud snapshot is missing tasks");
   if (!Array.isArray(value.focusSessions)) throw new Error("Cloud snapshot is missing focusSessions");
   if (!Array.isArray(value.timerPauses)) throw new Error("Cloud snapshot is missing timerPauses");

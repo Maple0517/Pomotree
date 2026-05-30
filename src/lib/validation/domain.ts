@@ -1,4 +1,4 @@
-import type { FocusSession, Interruption, Task, TimerPause, UserSettings } from "@/types/domain";
+import type { FocusSession, Interruption, Task, TaskLabel, TimerPause, UserSettings } from "@/types/domain";
 
 function hasValidDate(value: string | null | undefined) {
   return typeof value === "string" && Number.isFinite(new Date(value).getTime());
@@ -46,8 +46,28 @@ export function validateTaskRecord(task: Task) {
   if (task.status !== "done" && task.status !== "archived" && task.completedAt) {
     throw new Error("completedAt is only valid for done tasks");
   }
+  if (task.labelIds !== undefined && (!Array.isArray(task.labelIds) || task.labelIds.some((labelId) => typeof labelId !== "string" || !labelId.trim()))) {
+    throw new Error("Task labelIds must be non-empty strings");
+  }
   if (!hasValidDate(task.createdAt) || !hasValidDate(task.updatedAt)) {
     throw new Error("Task timestamps must be valid ISO strings");
+  }
+}
+
+export function validateTaskLabelRecord(label: TaskLabel) {
+  assertNonEmpty(label.name, "Task label name is required");
+  assertNonEmpty(label.normalizedName, "Task label normalizedName is required");
+  if (label.normalizedName !== label.name.trim().toLocaleLowerCase()) {
+    throw new Error("Task label normalizedName must match normalized name");
+  }
+  if (!/^#[0-9a-fA-F]{6}$/.test(label.color)) {
+    throw new Error("Task label color must be a hex color");
+  }
+  if (!Number.isFinite(label.sortOrder) || label.sortOrder < 0) {
+    throw new Error("Task label sortOrder must be non-negative");
+  }
+  if (!hasValidDate(label.createdAt) || !hasValidDate(label.updatedAt)) {
+    throw new Error("Task label timestamps must be valid ISO strings");
   }
 }
 

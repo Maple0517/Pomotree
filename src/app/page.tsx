@@ -2,11 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Archive, Check, ChevronDown, ChevronRight, MoreHorizontal, Sprout, Timer } from "lucide-react";
-import { getActiveTaskRows, getArchivedBranchRoots, getAutoExpandedTaskIds, getTaskChildrenMap, getTaskRows } from "@/lib/services/taskSelectors";
+import { getActiveTaskRows, getArchivedBranchRoots, getAutoExpandedTaskIds, getTaskChildrenMap, getTaskIdsMatchingLabel, getTaskRows } from "@/lib/services/taskSelectors";
 import { useAppStore } from "@/lib/store/useAppStore";
 import { computeRemainingSeconds, formatClock } from "@/lib/utils/timer";
 import { formatDuration, getTaskStats, getTodayStats } from "@/lib/services/stats";
-import type { UserSettings } from "@/types/domain";
+import type { TaskLabel, UserSettings } from "@/types/domain";
 import { CloudSyncPanel } from "@/components/CloudSyncPanel";
 
 type AppLanguage = NonNullable<UserSettings["language"]>;
@@ -15,6 +15,7 @@ type DashboardCopy = {
   addInterruption: string;
   addSubtask: string;
   addTaskPlaceholder: string;
+  allLabels: string;
   archive: string;
   archivedTasks: string;
   actualAttribution: string;
@@ -43,6 +44,9 @@ type DashboardCopy = {
   intentionLabel: string;
   intentionPlaceholder: string;
   interruptions: string;
+  labels: string;
+  labelInputPlaceholder: string;
+  labelFilter: string;
   language: string;
   light: string;
   loading: string;
@@ -110,6 +114,15 @@ function EmptyState({ icon, title, action }: { icon: React.ReactNode; title: str
   );
 }
 
+function taskLabelNames(taskLabels: TaskLabel[], labelIds: string[] | undefined) {
+  const byId = new Map(taskLabels.map((label) => [label.id, label]));
+  return (labelIds ?? []).map((labelId) => byId.get(labelId)).filter((label): label is TaskLabel => Boolean(label));
+}
+
+function labelInputValue(taskLabels: TaskLabel[], labelIds: string[] | undefined) {
+  return taskLabelNames(taskLabels, labelIds).map((label) => label.name).join(", ");
+}
+
 function lastActiveSessionTaskId(sessions: Array<{ taskId: string | null; status: string; endedAt: string | null; updatedAt: string }>, activeTaskIds: Set<string>) {
   return sessions
     .filter((session) => ["completed", "partial", "discarded"].includes(session.status) && session.taskId && activeTaskIds.has(session.taskId))
@@ -122,6 +135,7 @@ const DASHBOARD_TEXT: Record<AppLanguage, DashboardCopy> = {
     addInterruption: "Add interruption",
     addSubtask: "Add subtask",
     addTaskPlaceholder: "Add a task or path, e.g. Project / Subtask",
+    allLabels: "All",
     archive: "Archive",
     archivedTasks: "Archived Tasks",
     actualAttribution: "Actual attribution",
@@ -150,6 +164,9 @@ const DASHBOARD_TEXT: Record<AppLanguage, DashboardCopy> = {
     intentionLabel: "Intention without a task",
     intentionPlaceholder: "e.g. Read and annotate the proposal",
     interruptions: "Interruptions",
+    labels: "Labels",
+    labelInputPlaceholder: "work, home, urgent",
+    labelFilter: "Filter by label",
     language: "Language",
     light: "Light",
     loading: "Loading…",
@@ -201,6 +218,7 @@ const DASHBOARD_TEXT: Record<AppLanguage, DashboardCopy> = {
     addInterruption: "添加打断",
     addSubtask: "添加子任务",
     addTaskPlaceholder: "添加任务或路径，例如：项目 / 子任务",
+    allLabels: "全部",
     archive: "归档",
     archivedTasks: "已归档任务",
     actualAttribution: "实际归属",
@@ -229,6 +247,9 @@ const DASHBOARD_TEXT: Record<AppLanguage, DashboardCopy> = {
     intentionLabel: "不绑定任务的意图",
     intentionPlaceholder: "例如：阅读并批注方案",
     interruptions: "打断记录",
+    labels: "标签",
+    labelInputPlaceholder: "工作, 家庭, 紧急",
+    labelFilter: "按标签筛选",
     language: "语言",
     light: "日间",
     loading: "加载中…",
@@ -281,6 +302,7 @@ export default function Home() {
   const {
     settings,
     tasks,
+    labels,
     sessions,
     interruptions,
     hydrate,
@@ -320,11 +342,13 @@ export default function Home() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null | undefined>(undefined);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editingTaskTitle, setEditingTaskTitle] = useState("");
+  const [editingTaskLabels, setEditingTaskLabels] = useState("");
   const [editingParentId, setEditingParentId] = useState("");
   const [addingSubtaskParentId, setAddingSubtaskParentId] = useState<string | null>(null);
   const [subtaskTitle, setSubtaskTitle] = useState("");
   const [expandedTaskOverrides, setExpandedTaskOverrides] = useState<Record<string, boolean>>({});
   const [showArchivedTasks, setShowArchivedTasks] = useState(true);
+  const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editingSessionTaskId, setEditingSessionTaskId] = useState("");
   const [notificationStatus, setNotificationStatus] = useState<NotificationPermission | "unsupported">("unsupported");
@@ -335,6 +359,8 @@ export default function Home() {
   const [now, setNow] = useState(() => Date.now());
   const language = settings.language ?? "en";
   const copy = DASHBOARD_TEXT[language];
+  const selectedLabel = selectedLabelId ? labels.find((label) => label.id === selectedLabelId) : null;
+  const effectiveSelectedLabelId = selectedLabel?.id ?? null;
 
   useEffect(() => {
     void hydrate();
@@ -422,9 +448,10 @@ export default function Home() {
 
     return expanded;
   }, [activeTaskChildrenMap, activeTaskIdSet, autoExpandedTaskIds, expandedTaskOverrides, tasks]);
+  const filteredTaskIds = useMemo(() => getTaskIdsMatchingLabel(tasks, effectiveSelectedLabelId), [effectiveSelectedLabelId, tasks]);
   const visibleTaskRows = useMemo(
-    () => getTaskRows(tasks, { includeArchived: false, expandedTaskIds, defaultExpandedDepth: -1 }),
-    [expandedTaskIds, tasks],
+    () => getTaskRows(tasks, { includeArchived: false, expandedTaskIds, defaultExpandedDepth: -1, filterTaskIds: filteredTaskIds }),
+    [expandedTaskIds, filteredTaskIds, tasks],
   );
 
   const activeTaskTitle = activeSession?.intention
@@ -478,15 +505,17 @@ export default function Home() {
   const beginEditTask = (task: (typeof tasks)[number]) => {
     setEditingTaskId(task.id);
     setEditingTaskTitle(task.title);
+    setEditingTaskLabels(labelInputValue(labels, task.labelIds));
     setEditingParentId(task.parentId ?? "");
   };
 
   const saveTaskEdit = async () => {
     if (!editingTaskId) return;
-    await updateTask(editingTaskId, { title: editingTaskTitle });
+    await updateTask(editingTaskId, { title: editingTaskTitle, labelNames: editingTaskLabels.split(",") });
     await moveTask(editingTaskId, editingParentId || null);
     setEditingTaskId(null);
     setEditingTaskTitle("");
+    setEditingTaskLabels("");
     setEditingParentId("");
   };
 
@@ -733,9 +762,30 @@ export default function Home() {
                     {copy.add}
                   </button>
                 </form>
+                <div className="mt-4 flex flex-wrap items-center gap-2" aria-label={copy.labelFilter}>
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">{copy.labelFilter}</span>
+                  <button
+                    type="button"
+                    className={`rounded-full border px-3 py-1 text-xs font-semibold ${effectiveSelectedLabelId === null ? "border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent)]" : "border-[var(--border)] text-[var(--muted)] hover:bg-[var(--surface-soft)]"}`}
+                    onClick={() => setSelectedLabelId(null)}
+                  >
+                    {copy.allLabels}
+                  </button>
+                  {labels.map((label) => (
+                    <button
+                      key={label.id}
+                      type="button"
+                      className={`rounded-full border px-3 py-1 text-xs font-semibold ${effectiveSelectedLabelId === label.id ? "border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent)]" : "border-[var(--border)] text-[var(--muted)] hover:bg-[var(--surface-soft)]"}`}
+                      onClick={() => setSelectedLabelId(label.id)}
+                    >
+                      <span className="mr-1.5 inline-block h-2 w-2 rounded-full" style={{ backgroundColor: label.color }} aria-hidden="true" />
+                      {label.name}
+                    </button>
+                  ))}
+                </div>
                 <div className="mt-5 overflow-visible rounded-2xl border border-[var(--border)]">
                   {visibleTaskRows.length === 0 ? (
-                    <EmptyState icon={<Sprout size={20} strokeWidth={1.8} />} title={copy.noTasksYet} action={copy.addTaskPlaceholder} />
+                    <EmptyState icon={<Sprout size={20} strokeWidth={1.8} />} title={selectedLabel ? `${copy.noTasksYet} (${selectedLabel.name})` : copy.noTasksYet} action={copy.addTaskPlaceholder} />
                   ) : (
                     <div>
                       {visibleTaskRows.map(({ task, depth, hasChildren }, rowIndex) => {
@@ -794,6 +844,15 @@ export default function Home() {
                                     {copy.done}
                                   </span>
                                 ) : null}
+                                {taskLabelNames(labels, task.labelIds).map((label) => (
+                                  <span
+                                    key={label.id}
+                                    className="rounded-full border px-2 py-0.5 text-[10px] font-semibold text-[var(--muted-strong)]"
+                                    style={{ borderColor: `${label.color}55`, backgroundColor: `${label.color}18` }}
+                                  >
+                                    {label.name}
+                                  </span>
+                                ))}
                                 <span className="whitespace-nowrap text-xs text-[var(--muted)]">
                                   <Timer size={13} strokeWidth={1.8} aria-hidden="true" /> {stats?.completedCount ?? 0} · {formatDuration(stats?.totalFocusSeconds ?? 0)}
                                 </span>
@@ -907,12 +966,19 @@ export default function Home() {
                                   void saveTaskEdit();
                                 }}
                               >
-                                <div className="grid gap-2 xl:grid-cols-[minmax(0,1fr)_180px] xl:items-center">
+                                <div className="grid gap-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_180px] xl:items-center">
                                   <input
                                     aria-label={`${copy.edit}: ${task.title}`}
                                     value={editingTaskTitle}
                                     onChange={(event) => setEditingTaskTitle(event.target.value)}
                                     className="min-w-0 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 outline-none"
+                                  />
+                                  <input
+                                    aria-label={`${copy.labels}: ${task.title}`}
+                                    value={editingTaskLabels}
+                                    onChange={(event) => setEditingTaskLabels(event.target.value)}
+                                    className="min-w-0 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 outline-none"
+                                    placeholder={copy.labelInputPlaceholder}
                                   />
                                   <select
                                     aria-label={`${copy.task}: ${task.title}`}
@@ -935,7 +1001,7 @@ export default function Home() {
                                   <button
                                     type="button"
                                     className="rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-medium whitespace-nowrap"
-                                    onClick={() => setEditingTaskId(null)}
+                                    onClick={() => { setEditingTaskId(null); setEditingTaskLabels(""); }}
                                   >
                                     {copy.cancel}
                                   </button>

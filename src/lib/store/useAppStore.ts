@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import type { FocusSession, Interruption, Task, TimerPause, UserSettings } from "@/types/domain";
+import type { FocusSession, Interruption, Task, TaskLabel, TimerPause, UserSettings } from "@/types/domain";
 import {
   fetchCloudSnapshot,
   getCloudSyncUser,
@@ -43,6 +43,7 @@ import {
   updateSettings,
   updateTask,
   type RecoveryNotice,
+  type TaskUpdateInput,
   type SettingsUpdate,
 } from "@/lib/services/pomotree";
 
@@ -54,6 +55,7 @@ interface AppState {
   cloudSync: CloudSyncMetadata;
   settings: UserSettings;
   tasks: Task[];
+  labels: TaskLabel[];
   sessions: FocusSession[];
   interruptions: Interruption[];
   pauses: TimerPause[];
@@ -61,7 +63,7 @@ interface AppState {
   updateSettings: (input: SettingsUpdate) => Promise<void>;
   createTask: (title: string, parentId?: string | null) => Promise<void>;
   createTaskPath: (path: string) => Promise<void>;
-  updateTask: (taskId: string, input: { title?: string; description?: string | null; status?: Task["status"] }) => Promise<void>;
+  updateTask: (taskId: string, input: TaskUpdateInput) => Promise<void>;
   moveTask: (taskId: string, parentId: string | null) => Promise<void>;
   archiveTask: (taskId: string) => Promise<void>;
   restoreTaskBranch: (taskId: string) => Promise<void>;
@@ -258,6 +260,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   cloudSync: loadCloudSyncMetadata(),
   settings: createDefaultSettings(),
   tasks: [],
+  labels: [],
   sessions: [],
   interruptions: [],
   pauses: [],

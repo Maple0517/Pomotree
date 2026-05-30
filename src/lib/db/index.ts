@@ -1,7 +1,7 @@
 import Dexie, { type Table } from "dexie";
-import type { FocusSession, Interruption, Task, TimerPause, UserSettings } from "@/types/domain";
+import type { FocusSession, Interruption, Task, TaskLabel, TimerPause, UserSettings } from "@/types/domain";
 import { createDefaultSettings } from "./defaults";
-import { dexieSchema } from "./schema";
+import { dexieSchema, dexieSchemaV2 } from "./schema";
 import { validateUserSettingsRecord } from "@/lib/validation/domain";
 
 export class StorageUnavailableError extends Error {
@@ -13,6 +13,7 @@ export class StorageUnavailableError extends Error {
 
 export class PomotreeDatabase extends Dexie {
   tasks!: Table<Task, string>;
+  taskLabels!: Table<TaskLabel, string>;
   focusSessions!: Table<FocusSession, string>;
   timerPauses!: Table<TimerPause, string>;
   interruptions!: Table<Interruption, string>;
@@ -21,6 +22,11 @@ export class PomotreeDatabase extends Dexie {
   constructor(name = "pomotree") {
     super(name);
     this.version(1).stores(dexieSchema);
+    this.version(2).stores(dexieSchemaV2).upgrade(async (transaction) => {
+      const tasks = transaction.table<Task, string>("tasks");
+      const existingTasks = await tasks.toArray();
+      await tasks.bulkPut(existingTasks.map((task) => ({ ...task, labelIds: task.labelIds ?? [] })));
+    });
   }
 }
 

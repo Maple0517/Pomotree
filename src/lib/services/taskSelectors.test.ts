@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Task } from "@/types/domain";
-import { getActiveTaskRows, getArchivedBranchRoots, getAutoExpandedTaskIds, getTaskPathIds, getTaskRows, isArchivedBranchRoot } from "./taskSelectors";
+import { getActiveTaskRows, getArchivedBranchRoots, getAutoExpandedTaskIds, getTaskIdsMatchingLabel, getTaskPathIds, getTaskRows, isArchivedBranchRoot } from "./taskSelectors";
 
 const now = "2026-05-26T00:00:00.000Z";
 
@@ -68,5 +68,17 @@ describe("task selectors", () => {
   it("builds task paths and auto-expanded ancestor ids", () => {
     expect(getTaskPathIds(tasks, "draft")).toEqual(["project", "draft"]);
     expect([...getAutoExpandedTaskIds(tasks, ["draft"])]).toEqual(["project"]);
+  });
+
+  it("filters by label while preserving ancestor context", () => {
+    const labeledTasks: Task[] = [
+      { id: "project", parentId: null, title: "Project", status: "todo", sortOrder: 0, createdAt: now, updatedAt: now },
+      { id: "draft", parentId: "project", title: "Draft", labelIds: ["work"], status: "todo", sortOrder: 0, createdAt: now, updatedAt: now },
+      { id: "personal", parentId: null, title: "Personal", labelIds: ["home"], status: "todo", sortOrder: 1, createdAt: now, updatedAt: now },
+    ];
+
+    const matchingIds = getTaskIdsMatchingLabel(labeledTasks, "work");
+    expect([...(matchingIds ?? [])]).toEqual(["project", "draft"]);
+    expect(getTaskRows(labeledTasks, { filterTaskIds: matchingIds }).map(({ task }) => task.id)).toEqual(["project", "draft"]);
   });
 });

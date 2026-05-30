@@ -383,11 +383,41 @@ describe("pomotree service invariants", () => {
 
     const exported = await exportJson();
 
-    expect(exported.schemaVersion).toBe(1);
+    expect(exported.schemaVersion).toBe(2);
+    expect(exported.labels).toEqual([]);
     expect(exported.userSettings.defaultFocusSeconds).toBe(50 * 60);
     expect(exported.userSettings.theme).toBe("dark");
     expect(exported.userSettings.enableNotifications).toBe(true);
     expect(exported.tasks).toHaveLength(1);
+  });
+
+
+  it("auto-creates task labels and deduplicates names case-insensitively", async () => {
+    const task = await createTask("Label target");
+
+    const updated = await updateTask(task.id, { labelNames: [" Work ", "work", "Home", ""] });
+    const labels = await db.taskLabels.orderBy("sortOrder").toArray();
+
+    expect(labels.map((label) => label.name)).toEqual(["Work", "Home"]);
+    expect(updated.labelIds).toEqual(labels.map((label) => label.id));
+
+    await updateTask(task.id, { labelNames: ["home", "Deep Work"] });
+    const finalLabels = await db.taskLabels.orderBy("sortOrder").toArray();
+    expect(finalLabels.map((label) => label.name)).toEqual(["Work", "Home", "Deep Work"]);
+    expect((await db.tasks.get(task.id))?.labelIds).toEqual([finalLabels[1].id, finalLabels[2].id]);
+  });
+
+  it("exports and imports v2 labels with task label ids", async () => {
+    const task = await createTask("Tagged export");
+    await updateTask(task.id, { labelNames: ["Work", "Urgent"] });
+
+    const exported = await exportJson();
+    await db.tasks.clear();
+    await db.taskLabels.clear();
+    await importJson(exported);
+
+    expect((await db.taskLabels.orderBy("sortOrder").toArray()).map((label) => label.name)).toEqual(["Work", "Urgent"]);
+    expect((await db.tasks.get(task.id))?.labelIds).toEqual(exported.tasks[0].labelIds);
   });
 
   it("imports a Pomotree export by replacing local data atomically", async () => {
@@ -413,7 +443,8 @@ describe("pomotree service invariants", () => {
       userSettings: importedSettings,
     });
 
-    expect(await db.tasks.toArray()).toEqual([importedTask]);
+    expect(await db.tasks.toArray()).toEqual([{ ...importedTask, labelIds: [] }]);
+    expect(await db.taskLabels.toArray()).toEqual([]);
     expect((await db.userSettings.get("local"))?.defaultFocusSeconds).toBe(50 * 60);
   });
 

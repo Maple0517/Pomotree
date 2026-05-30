@@ -5,16 +5,18 @@ import { createId, nowIso } from "@/lib/utils/time";
 import {
   validateFocusSessionRecord,
   validateInterruptionRecord,
+  validateTaskLabelRecord,
   validateTaskRecord,
   validateTimerPauseRecord,
   validateUserSettingsRecord,
 } from "@/lib/validation/domain";
-import type { FocusSession, Interruption, RestorableTaskStatus, Task, TimerPause, UserSettings } from "@/types/domain";
+import type { FocusSession, Interruption, RestorableTaskStatus, Task, TaskLabel, TimerPause, UserSettings } from "@/types/domain";
 
 export interface PomotreeExport {
-  schemaVersion: 1;
+  schemaVersion: 2;
   exportedAt: string;
   tasks: Task[];
+  labels: TaskLabel[];
   focusSessions: FocusSession[];
   timerPauses: TimerPause[];
   interruptions: Interruption[];
@@ -22,6 +24,112 @@ export interface PomotreeExport {
 }
 
 type UnknownRecord = Record<string, unknown>;
+
+const LABEL_COLORS = ["#f05a32", "#2563eb", "#16a34a", "#9333ea", "#db2777", "#ca8a04", "#0891b2", "#64748b"] as const;
+
+type RawPomotreeExport = Omit<PomotreeExport, "schemaVersion" | "labels"> & {
+  schemaVersion: 1 | 2;
+  labels?: TaskLabel[];
+};
+
+export type TaskUpdateInput = {
+  title?: string;
+  description?: string | null;
+  status?: Task["status"];
+  labelNames?: string[];
+  labelIds?: string[];
+};
+
+export function normalizeTaskLabelName(name: string) {
+  return name.trim().replace(/\s+/g, " ");
+}
+
+export function normalizeTaskLabelKey(name: string) {
+  return normalizeTaskLabelName(name).toLocaleLowerCase();
+}
+
+export function parseTaskLabelInput(input: string) {
+  const seen = new Set<string>();
+  const names: string[] = [];
+  for (const part of input.split(",")) {
+    const name = normalizeTaskLabelName(part);
+    const key = normalizeTaskLabelKey(name);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    names.push(name);
+  }
+  return names;
+}
+
+function normalizeTaskLabelIds(labelIds: string[]) {
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+  for (const rawId of labelIds) {
+    const labelId = rawId.trim();
+    if (!labelId || seen.has(labelId)) continue;
+    seen.add(labelId);
+    normalized.push(labelId);
+  }
+  return normalized;
+}
+
+function withNormalizedTaskLabels(task: Task): Task {
+  return { ...task, labelIds: normalizeTaskLabelIds(task.labelIds ?? []) };
+}
+
+function labelColorForIndex(index: number) {
+  return LABEL_COLORS[index % LABEL_COLORS.length];
+}
+
+async function resolveTaskLabelIds(input: { labelNames?: string[]; labelIds?: string[] }) {
+  if (input.labelIds !== undefined) {
+    const labelIds = normalizeTaskLabelIds(input.labelIds);
+    const labels = labelIds.length ? await db.taskLabels.bulkGet(labelIds) : [];
+    if (labels.some((label) => !label)) throw new Error("Task label not found");
+    return labelIds;
+  }
+
+  if (input.labelNames === undefined) return undefined;
+
+  const requestedNames: string[] = [];
+  const requestedKeys = new Set<string>();
+  for (const rawName of input.labelNames) {
+    const name = normalizeTaskLabelName(rawName);
+    const key = normalizeTaskLabelKey(name);
+    if (!key || requestedKeys.has(key)) continue;
+    requestedKeys.add(key);
+    requestedNames.push(name);
+  }
+
+  if (requestedNames.length === 0) return [];
+
+  const existingLabels = await db.taskLabels.toArray();
+  const byKey = new Map(existingLabels.map((label) => [label.normalizedName, label]));
+  const created: TaskLabel[] = [];
+  let nextSortOrder = existingLabels.length;
+
+  for (const name of requestedNames) {
+    const key = normalizeTaskLabelKey(name);
+    if (byKey.has(key)) continue;
+    const now = nowIso();
+    const label: TaskLabel = {
+      id: createId(),
+      name,
+      normalizedName: key,
+      color: labelColorForIndex(nextSortOrder),
+      sortOrder: nextSortOrder,
+      createdAt: now,
+      updatedAt: now,
+    };
+    validateTaskLabelRecord(label);
+    created.push(label);
+    byKey.set(key, label);
+    nextSortOrder += 1;
+  }
+
+  if (created.length > 0) await db.taskLabels.bulkAdd(created);
+  return requestedNames.map((name) => byKey.get(normalizeTaskLabelKey(name))!.id);
+}
 
 export interface RecoveryNotice {
   kind: "expired" | "corrupt";
@@ -31,6 +139,7 @@ export interface RecoveryNotice {
 export interface AppSnapshot {
   settings: UserSettings;
   tasks: Task[];
+  labels: TaskLabel[];
   sessions: FocusSession[];
   interruptions: Interruption[];
   pauses: TimerPause[];
@@ -61,21 +170,29 @@ function isObject(value: unknown): value is UnknownRecord {
 function parsePomotreeExport(input: string | unknown): PomotreeExport {
   const parsed: unknown = typeof input === "string" ? JSON.parse(input) : input;
   if (!isObject(parsed)) throw new Error("Import file must be a Pomotree JSON object");
-  if (parsed.schemaVersion !== 1) throw new Error("Unsupported Pomotree export schema version");
+  if (parsed.schemaVersion !== 1 && parsed.schemaVersion !== 2) throw new Error("Unsupported Pomotree export schema version");
   if (!Array.isArray(parsed.tasks)) throw new Error("Import file is missing tasks");
+  if (parsed.schemaVersion === 2 && !Array.isArray(parsed.labels)) throw new Error("Import file is missing labels");
   if (!Array.isArray(parsed.focusSessions)) throw new Error("Import file is missing focusSessions");
   if (!Array.isArray(parsed.timerPauses)) throw new Error("Import file is missing timerPauses");
   if (!Array.isArray(parsed.interruptions)) throw new Error("Import file is missing interruptions");
   if (!isObject(parsed.userSettings)) throw new Error("Import file is missing userSettings");
 
-  const exportData: PomotreeExport = {
-    schemaVersion: 1,
+  const rawExport: RawPomotreeExport = {
+    schemaVersion: parsed.schemaVersion,
     exportedAt: typeof parsed.exportedAt === "string" ? parsed.exportedAt : nowIso(),
-    tasks: parsed.tasks as Task[],
+    tasks: (parsed.tasks as Task[]).map(withNormalizedTaskLabels),
+    labels: parsed.schemaVersion === 2 ? (parsed.labels as TaskLabel[]) : [],
     focusSessions: parsed.focusSessions as FocusSession[],
     timerPauses: parsed.timerPauses as TimerPause[],
     interruptions: parsed.interruptions as Interruption[],
     userSettings: parsed.userSettings as unknown as UserSettings,
+  };
+
+  const exportData: PomotreeExport = {
+    ...rawExport,
+    schemaVersion: 2,
+    labels: rawExport.labels ?? [],
   };
 
   validatePomotreeExport(exportData);
@@ -84,15 +201,24 @@ function parsePomotreeExport(input: string | unknown): PomotreeExport {
 
 function validatePomotreeExport(exportData: PomotreeExport) {
   for (const task of exportData.tasks) validateTaskRecord(task);
+  for (const label of exportData.labels) validateTaskLabelRecord(label);
   for (const session of exportData.focusSessions) validateFocusSessionRecord(session);
   for (const pause of exportData.timerPauses) validateTimerPauseRecord(pause);
   for (const interruption of exportData.interruptions) validateInterruptionRecord(interruption);
   validateUserSettingsRecord(exportData.userSettings);
 
+  const labelIds = new Set(exportData.labels.map((label) => label.id));
+  if (labelIds.size !== exportData.labels.length) throw new Error("Import file contains duplicate label ids");
+  const labelKeys = new Set(exportData.labels.map((label) => label.normalizedName));
+  if (labelKeys.size !== exportData.labels.length) throw new Error("Import file contains duplicate labels");
+
   const taskIds = new Set(exportData.tasks.map((task) => task.id));
   if (taskIds.size !== exportData.tasks.length) throw new Error("Import file contains duplicate task ids");
   for (const task of exportData.tasks) {
     if (task.parentId && !taskIds.has(task.parentId)) throw new Error("Import file contains a task with a missing parent");
+    for (const labelId of task.labelIds ?? []) {
+      if (!labelIds.has(labelId)) throw new Error("Import file contains a task with a missing label");
+    }
   }
 
   const sessionIds = new Set(exportData.focusSessions.map((session) => session.id));
@@ -281,14 +407,15 @@ export async function restoreActiveSession(): Promise<RecoveryNotice | null> {
 export async function loadAppSnapshot(): Promise<AppSnapshot> {
   await ensureDefaultSettings();
   const recoveryNotice = await restoreActiveSession();
-  const [settings, rawTasks, sessions, interruptions, pauses] = await Promise.all([
+  const [settings, rawTasks, labels, sessions, interruptions, pauses] = await Promise.all([
     db.userSettings.get("local"),
     db.tasks.orderBy("sortOrder").toArray(),
+    db.taskLabels.orderBy("sortOrder").toArray(),
     db.focusSessions.orderBy("createdAt").reverse().toArray(),
     db.interruptions.orderBy("createdAt").reverse().toArray(),
     db.timerPauses.toArray(),
   ]);
-  const repairedTasks = repairArchivedSubtrees(rawTasks);
+  const repairedTasks = repairArchivedSubtrees(rawTasks.map(withNormalizedTaskLabels));
 
   if (repairedTasks.some((task, index) => task !== rawTasks[index])) {
     await db.transaction("rw", db.tasks, async () => {
@@ -299,6 +426,7 @@ export async function loadAppSnapshot(): Promise<AppSnapshot> {
   return {
     settings: settings ?? createDefaultSettings(),
     tasks: repairedTasks,
+    labels,
     sessions,
     interruptions,
     pauses,
@@ -323,6 +451,7 @@ export async function createTask(title: string, parentId: string | null = null) 
     id: createId(),
     parentId,
     title: normalized,
+    labelIds: [],
     status: "todo",
     sortOrder: existing,
     createdAt: now,
@@ -361,6 +490,7 @@ export async function createTaskPath(path: string) {
           id: createId(),
           parentId,
           title,
+          labelIds: [],
           status: "todo",
           sortOrder: existing,
           createdAt: now,
@@ -455,7 +585,7 @@ export async function restoreTaskBranch(taskId: string) {
   });
 }
 
-export async function updateTask(taskId: string, input: { title?: string; description?: string | null; status?: Task["status"] }) {
+export async function updateTask(taskId: string, input: TaskUpdateInput) {
   const task = await db.tasks.get(taskId);
   if (!task) throw new Error("Task not found");
   if (input.status === "archived") {
@@ -470,12 +600,14 @@ export async function updateTask(taskId: string, input: { title?: string; descri
     throw new Error("Task title is required");
   }
 
+  const labelIds = await resolveTaskLabelIds(input);
   const now = nowIso();
   const statusPatch = input.status ? normalizeTaskStatus(input.status, now) : {};
   const updated: Task = {
-    ...task,
+    ...withNormalizedTaskLabels(task),
     ...(normalizedTitle !== undefined ? { title: normalizedTitle } : {}),
     ...(input.description !== undefined ? { description: input.description?.trim() || undefined } : {}),
+    ...(labelIds !== undefined ? { labelIds } : {}),
     ...statusPatch,
     updatedAt: now,
   };
@@ -769,9 +901,10 @@ export async function saveFinish(input: { status: "completed" | "partial"; summa
 export async function exportJson(): Promise<PomotreeExport> {
   const snapshot = await loadAppSnapshot();
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     exportedAt: nowIso(),
     tasks: snapshot.tasks,
+    labels: snapshot.labels,
     focusSessions: snapshot.sessions,
     timerPauses: snapshot.pauses,
     interruptions: snapshot.interruptions,
@@ -788,12 +921,14 @@ export async function importJson(input: string | unknown): Promise<AppSnapshot> 
   };
   validatePomotreeExport(repairedExport);
 
-  await db.transaction("rw", [db.tasks, db.focusSessions, db.timerPauses, db.interruptions, db.userSettings], async () => {
+  await db.transaction("rw", [db.tasks, db.taskLabels, db.focusSessions, db.timerPauses, db.interruptions, db.userSettings], async () => {
     await db.tasks.clear();
+    await db.taskLabels.clear();
     await db.focusSessions.clear();
     await db.timerPauses.clear();
     await db.interruptions.clear();
     await db.userSettings.clear();
+    await db.taskLabels.bulkPut(repairedExport.labels);
     await db.tasks.bulkPut(repairedExport.tasks);
     await db.focusSessions.bulkPut(repairedExport.focusSessions);
     await db.timerPauses.bulkPut(repairedExport.timerPauses);
@@ -891,6 +1026,7 @@ export async function convertInterruptionToTask(interruptionId: string, parentId
     id: createId(),
     parentId,
     title: normalized,
+    labelIds: [],
     status: "todo",
     sortOrder: siblingCount,
     createdAt: now,

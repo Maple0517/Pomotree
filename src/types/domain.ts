@@ -9,6 +9,7 @@ export interface Task {
   parentId: EntityId | null;
   title: string;
   description?: string;
+  labelIds?: EntityId[];
   status: TaskStatus;
   previousStatus?: RestorableTaskStatus | null;
   sortOrder: number;
@@ -16,6 +17,16 @@ export interface Task {
   updatedAt: ISODateTimeString;
   completedAt?: ISODateTimeString | null;
   archivedAt?: ISODateTimeString | null;
+}
+
+export interface TaskLabel {
+  id: EntityId;
+  name: string;
+  normalizedName: string;
+  color: string;
+  sortOrder: number;
+  createdAt: ISODateTimeString;
+  updatedAt: ISODateTimeString;
 }
 
 export type FocusSessionStatus =

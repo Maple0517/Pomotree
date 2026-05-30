@@ -17,9 +17,10 @@ const user = { id: "user-1", email: "test@example.com" } as User;
 
 function makeSnapshot(overrides: Partial<PomotreeExport> = {}): PomotreeExport {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     exportedAt: "2026-05-30T00:00:00.000Z",
     tasks: [],
+    labels: [],
     focusSessions: [],
     timerPauses: [],
     interruptions: [],
@@ -77,7 +78,7 @@ describe("cloud sync snapshot helpers", () => {
 
     expect(payload).toMatchObject({
       user_id: "user-1",
-      schema_version: 1,
+      schema_version: 2,
       snapshot,
       snapshot_updated_at: "2026-05-30T01:00:00.000Z",
       client_id: "client-1",
@@ -86,14 +87,14 @@ describe("cloud sync snapshot helpers", () => {
   });
 
   it("rejects unsupported cloud snapshot schema versions", () => {
-    expect(() => assertPomotreeSnapshot({ ...makeSnapshot(), schemaVersion: 2 as 1 })).toThrow("Unsupported cloud snapshot schema version");
+    expect(() => assertPomotreeSnapshot({ ...makeSnapshot(), schemaVersion: 99 as 2 })).toThrow("Unsupported cloud snapshot schema version");
   });
 
   it("blocks upload when cloud data is newer than this device has seen", async () => {
     saveCloudSyncMetadata({ ...createDefaultCloudSyncMetadata(), lastSeenCloudUpdatedAt: "2026-05-30T01:00:00.000Z", status: "idle" });
     const cloudRow = {
       user_id: user.id,
-      schema_version: 1,
+      schema_version: 2,
       snapshot: makeSnapshot(),
       snapshot_updated_at: "2026-05-30T02:00:00.000Z",
       client_id: "other-client",
@@ -116,7 +117,7 @@ describe("cloud sync snapshot helpers", () => {
   it("restores cloud data through Pomotree import validation", async () => {
     const cloudRow = {
       user_id: user.id,
-      schema_version: 1,
+      schema_version: 2,
       snapshot: makeSnapshot({
         tasks: [{
           id: "cloud-task",
