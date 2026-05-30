@@ -24,6 +24,8 @@ type TimelineCopy = {
 const DAY_SECONDS = 24 * 60 * 60;
 const TIMELINE_HEIGHT_PX = 900;
 const SESSION_CARD_HEIGHT_PX = 58;
+const SESSION_GROUP_ROW_HEIGHT_PX = 38;
+const SESSION_GROUP_PADDING_PX = 16;
 const SESSION_CARD_GAP_PX = 8;
 
 type TimelineSession = FocusSession & {
@@ -34,8 +36,14 @@ type TimelineSession = FocusSession & {
   displaySeconds: number;
 };
 
-type PositionedTimelineSession = TimelineSession & {
+type TimelineSessionGroup = {
+  id: string;
+  sessions: TimelineSession[];
+  color: string;
+  startSeconds: number;
+  endSeconds: number;
   layoutTopPx: number;
+  heightPx: number;
 };
 
 type TimelineGap = {
@@ -139,23 +147,58 @@ function buildDailyTimeline(sessions: FocusSession[], tasks: Task[], day: Date, 
   return { timelineSessions, gaps };
 }
 
-function layoutTimelineSessions(sessions: TimelineSession[]): PositionedTimelineSession[] {
-  const maxTop = TIMELINE_HEIGHT_PX - SESSION_CARD_HEIGHT_PX;
-  const positioned = sessions.map((session) => ({
-    ...session,
-    layoutTopPx: Math.min(maxTop, Math.max(0, (session.startSeconds / DAY_SECONDS) * TIMELINE_HEIGHT_PX)),
+function groupHeight(sessionCount: number) {
+  return sessionCount === 1
+    ? SESSION_CARD_HEIGHT_PX
+    : SESSION_GROUP_PADDING_PX + sessionCount * SESSION_GROUP_ROW_HEIGHT_PX;
+}
+
+function projectedTop(seconds: number) {
+  return (seconds / DAY_SECONDS) * TIMELINE_HEIGHT_PX;
+}
+
+function groupTimelineSessions(sessions: TimelineSession[]): TimelineSessionGroup[] {
+  const groups: TimelineSessionGroup[] = [];
+
+  for (const session of sessions) {
+    const latestGroup = groups.at(-1);
+    const sessionTop = projectedTop(session.startSeconds);
+
+    if (!latestGroup || sessionTop >= latestGroup.layoutTopPx + latestGroup.heightPx + SESSION_CARD_GAP_PX) {
+      groups.push({
+        id: session.id,
+        sessions: [session],
+        color: session.color,
+        startSeconds: session.startSeconds,
+        endSeconds: session.endSeconds,
+        layoutTopPx: sessionTop,
+        heightPx: groupHeight(1),
+      });
+      continue;
+    }
+
+    latestGroup.sessions.push(session);
+    latestGroup.id = `${latestGroup.id}-${session.id}`;
+    latestGroup.endSeconds = session.endSeconds;
+    latestGroup.heightPx = groupHeight(latestGroup.sessions.length);
+  }
+
+  const positioned = groups.map((group) => ({
+    ...group,
+    layoutTopPx: Math.min(TIMELINE_HEIGHT_PX - group.heightPx, Math.max(0, group.layoutTopPx)),
   }));
 
   for (let index = 1; index < positioned.length; index += 1) {
     const previous = positioned[index - 1];
     const current = positioned[index];
-    current.layoutTopPx = Math.max(current.layoutTopPx, previous.layoutTopPx + SESSION_CARD_HEIGHT_PX + SESSION_CARD_GAP_PX);
+    current.layoutTopPx = Math.max(current.layoutTopPx, previous.layoutTopPx + previous.heightPx + SESSION_CARD_GAP_PX);
   }
 
   for (let index = positioned.length - 1; index >= 0; index -= 1) {
     const next = positioned[index + 1];
     const current = positioned[index];
-    const upperBound = next ? next.layoutTopPx - SESSION_CARD_HEIGHT_PX - SESSION_CARD_GAP_PX : maxTop;
+    const maxTop = TIMELINE_HEIGHT_PX - current.heightPx;
+    const upperBound = next ? next.layoutTopPx - current.heightPx - SESSION_CARD_GAP_PX : maxTop;
     current.layoutTopPx = Math.max(0, Math.min(current.layoutTopPx, upperBound));
   }
 
@@ -195,8 +238,8 @@ export function DailyFocusTimeline({
     () => buildDailyTimeline(sessions, tasks, timelineDay, copy.unassigned),
     [copy.unassigned, sessions, tasks, timelineDay],
   );
-  const positionedSessions = useMemo(() => layoutTimelineSessions(timelineSessions), [timelineSessions]);
-  const selectedSession = positionedSessions.find((session) => session.id === selectedSessionId) ?? positionedSessions[0] ?? null;
+  const sessionGroups = useMemo(() => groupTimelineSessions(timelineSessions), [timelineSessions]);
+  const selectedSession = timelineSessions.find((session) => session.id === selectedSessionId) ?? timelineSessions[0] ?? null;
   const totalSeconds = timelineSessions.reduce((total, session) => total + session.displaySeconds, 0);
   const longestSeconds = timelineSessions.reduce((longest, session) => Math.max(longest, session.displaySeconds), 0);
   const hourMarks = Array.from({ length: 7 }, (_, index) => index * 4);
@@ -290,36 +333,50 @@ export function DailyFocusTimeline({
                   {copy.idle} · {formatCompactDuration(gap.endSeconds - gap.startSeconds)}
                 </div>
               ))}
-              {positionedSessions.map((session) => {
-                const start = new Date(session.startedAt);
-                const end = new Date(session.endedAt ?? session.startedAt);
-                const selected = selectedSession?.id === session.id;
+              {sessionGroups.map((group) => {
+                const selected = group.sessions.some((session) => selectedSession?.id === session.id);
                 return (
-                  <button
-                    key={session.id}
-                    className={`group absolute left-0 h-[58px] w-full max-w-[31rem] overflow-hidden rounded-[1.1rem] border px-3 py-2 text-left transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:-translate-y-0.5 sm:px-3 ${
+                  <article
+                    key={group.id}
+                    className={`absolute left-0 w-full max-w-[31rem] overflow-hidden rounded-[1.1rem] border px-3 py-2 transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:-translate-y-0.5 sm:px-3 ${
                       selected ? "border-[var(--border)] shadow-[0_18px_45px_rgba(10,20,18,0.08)]" : "border-transparent"
                     }`}
                     style={{
-                      top: session.layoutTopPx,
-                      background: `linear-gradient(135deg, ${session.color}22, ${session.color}10)`,
+                      top: group.layoutTopPx,
+                      height: group.heightPx,
+                      background: `linear-gradient(135deg, ${group.color}22, ${group.color}10)`,
                       zIndex: selected ? 2 : 1,
                     }}
-                    onClick={() => setSelectedSessionId(session.id)}
                   >
-                    <span className="absolute bottom-2 left-0 top-2 w-1 rounded-full" style={{ backgroundColor: session.color }} aria-hidden="true" />
-                    <span className="flex items-start justify-between gap-3 pl-2">
-                      <span className="min-w-0">
-                        <span className="block font-mono text-[11px] font-semibold tabular-nums text-[var(--muted-strong)]">
-                          {formatTime(start)} – {formatTime(end)}
-                        </span>
-                        <span className="mt-1 block truncate text-sm font-semibold text-[var(--foreground)]">{session.title}</span>
-                      </span>
-                      <span className="shrink-0 font-mono text-xs font-semibold tabular-nums" style={{ color: session.color }}>
-                        {formatCompactDuration(session.displaySeconds)}
-                      </span>
-                    </span>
-                  </button>
+                    <span className="absolute bottom-2 left-0 top-2 w-1 rounded-full" style={{ backgroundColor: group.color }} aria-hidden="true" />
+                    <div className="pl-2">
+                      {group.sessions.map((session) => {
+                        const start = new Date(session.startedAt);
+                        const end = new Date(session.endedAt ?? session.startedAt);
+                        const rowSelected = selectedSession?.id === session.id;
+
+                        return (
+                          <button
+                            key={session.id}
+                            className={`flex h-[38px] w-full items-center justify-between gap-3 rounded-xl px-2 text-left transition-colors ${
+                              rowSelected ? "bg-[var(--surface)]/65" : "hover:bg-[var(--surface)]/42"
+                            }`}
+                            onClick={() => setSelectedSessionId(session.id)}
+                          >
+                            <span className="min-w-0">
+                              <span className="block font-mono text-[11px] font-semibold tabular-nums text-[var(--muted-strong)]">
+                                {formatTime(start)} – {formatTime(end)}
+                              </span>
+                              <span className="block truncate text-sm font-semibold text-[var(--foreground)]">{session.title}</span>
+                            </span>
+                            <span className="shrink-0 font-mono text-xs font-semibold tabular-nums" style={{ color: session.color }}>
+                              {formatCompactDuration(session.displaySeconds)}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </article>
                 );
               })}
             </div>
