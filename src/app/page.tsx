@@ -396,7 +396,7 @@ export default function Home() {
   const activeTaskRows = useMemo(() => getActiveTaskRows(tasks), [tasks]);
   const activeTaskChildrenMap = useMemo(() => getTaskChildrenMap(tasks, { includeArchived: false }), [tasks]);
   const archivedBranchRoots = useMemo(() => getArchivedBranchRoots(tasks), [tasks]);
-  const activeTaskIdSet = useMemo(() => new Set(tasks.filter((task) => task.status !== "archived").map((task) => task.id)), [tasks]);
+  const activeTaskIdSet = useMemo(() => new Set(tasks.filter((task) => task.status !== "archived" && task.status !== "done").map((task) => task.id)), [tasks]);
   const lastTaskId = useMemo(() => lastActiveSessionTaskId(sessions, activeTaskIdSet), [activeTaskIdSet, sessions]);
   const firstActiveTaskId = activeTaskRows[0]?.task.id ?? null;
   const defaultTaskId = activeSession?.taskId ?? lastTaskId ?? firstActiveTaskId;
@@ -459,7 +459,7 @@ export default function Home() {
   }, [sessions, tasks]);
   const recentSessions = sessions.filter((session) => ["completed", "partial"].includes(session.status)).slice(0, 5);
   const openInterruptions = interruptions.filter((interruption) => interruption.status === "open");
-  const canStartFocus = Boolean((effectiveTaskId && selectedTask?.status !== "archived") || focusIntention.trim());
+  const canStartFocus = Boolean((effectiveTaskId && selectedTask?.status !== "done" && selectedTask?.status !== "archived") || focusIntention.trim());
 
   const editableParentOptions = useMemo(() => {
     if (!editingTaskId) return [];
@@ -699,13 +699,13 @@ export default function Home() {
                     <div className="mt-3 flex flex-wrap gap-2">
                       <button
                         className="rounded-full bg-[var(--primary)] px-4 py-2 text-sm font-medium text-[var(--primary-foreground)]"
-                        onClick={() => void saveFinish({ status: "completed", summary, taskId: finishTaskId, markTaskDone }).then(() => { setSummary(""); setSelectedTaskId(finishTaskId === undefined ? activeSession?.taskId ?? null : finishTaskId); setMarkTaskDone(false); })}
+                        onClick={() => void saveFinish({ status: "completed", summary, taskId: finishTaskId, markTaskDone }).then(() => { setSummary(""); setSelectedTaskId(markTaskDone ? undefined : (finishTaskId === undefined ? activeSession?.taskId ?? null : finishTaskId)); setMarkTaskDone(false); })}
                       >
                         {copy.saveCompleted}
                       </button>
                       <button
                         className="rounded-full border border-[var(--border)] px-4 py-2 text-sm font-medium"
-                        onClick={() => void saveFinish({ status: "partial", summary, taskId: finishTaskId, markTaskDone }).then(() => { setSummary(""); setSelectedTaskId(finishTaskId === undefined ? activeSession?.taskId ?? null : finishTaskId); setMarkTaskDone(false); })}
+                        onClick={() => void saveFinish({ status: "partial", summary, taskId: finishTaskId, markTaskDone }).then(() => { setSummary(""); setSelectedTaskId(markTaskDone ? undefined : (finishTaskId === undefined ? activeSession?.taskId ?? null : finishTaskId)); setMarkTaskDone(false); })}
                       >
                         {copy.savePartial}
                       </button>
@@ -811,14 +811,16 @@ export default function Home() {
                                 </span>
                               </div>
                               <div className="ml-auto flex shrink-0 items-center gap-2">
-                                <button
-                                  aria-label={`${copy.focus}: ${task.title}`}
-                                  className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--muted)] hover:bg-[var(--surface-soft)] disabled:opacity-40"
-                                  disabled={Boolean(activeSession)}
-                                  onClick={() => void startFocus(task.id, focusIntention, customPlannedSeconds).then(() => setFocusIntention(""))}
-                                >
-                                  {copy.focus}
-                                </button>
+                                {!isDone ? (
+                                  <button
+                                    aria-label={`${copy.focus}: ${task.title}`}
+                                    className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--muted)] hover:bg-[var(--surface-soft)] disabled:opacity-40"
+                                    disabled={Boolean(activeSession)}
+                                    onClick={() => void startFocus(task.id, focusIntention, customPlannedSeconds).then(() => setFocusIntention(""))}
+                                  >
+                                    {copy.focus}
+                                  </button>
+                                ) : null}
                                 {!isDone ? (
                                   <button
                                     aria-label={`${copy.addSubtask}: ${task.title}`}
