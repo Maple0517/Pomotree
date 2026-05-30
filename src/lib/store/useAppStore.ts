@@ -9,13 +9,13 @@ import {
   loadCloudSyncMetadata,
   resetCloudSyncMetadataAfterSignOut,
   restoreCloudSnapshot,
-  sendCloudSyncOtp,
+  signInCloudSyncWithPassword,
   signOutCloudSync,
+  signUpCloudSyncWithPassword,
   snapshotHasLocalData,
   subscribeToCloudAuthChanges,
   updateCloudSyncMetadata,
   uploadCloudSnapshot,
-  verifyCloudSyncOtp,
   type CloudSyncMetadata,
 } from "@/lib/services/cloudSync";
 import { createDefaultSettings } from "@/lib/db/defaults";
@@ -79,8 +79,8 @@ interface AppState {
   convertInterruptionToTask: (interruptionId: string) => Promise<void>;
   exportJson: () => Promise<string>;
   importJson: (json: string) => Promise<void>;
-  sendCloudSyncOtp: (email: string) => Promise<void>;
-  verifyCloudSyncOtp: (email: string, token: string) => Promise<void>;
+  signInCloudSync: (email: string, password: string) => Promise<void>;
+  signUpCloudSync: (email: string, password: string) => Promise<void>;
   signOutCloudSync: () => Promise<void>;
   refreshCloudSync: () => Promise<void>;
   backupToCloud: (options?: { force?: boolean }) => Promise<void>;
@@ -439,22 +439,24 @@ export const useAppStore = create<AppState>((set, get) => ({
       throw error;
     }
   },
-  sendCloudSyncOtp: async (email) => {
+  signInCloudSync: async (email, password) => {
     try {
-      await sendCloudSyncOtp(email);
-      set({ cloudSync: loadCloudSyncMetadata(), error: null });
-    } catch (error) {
-      setCloudSyncState(set, { status: "signed_out", error: error instanceof Error ? error.message : "Failed to send verification code" });
-      throw error;
-    }
-  },
-  verifyCloudSyncOtp: async (email, token) => {
-    try {
-      await verifyCloudSyncOtp(email, token);
+      await signInCloudSyncWithPassword(email, password);
       await refreshCloudSyncState(set);
       set({ cloudSync: loadCloudSyncMetadata(), error: null });
     } catch (error) {
-      setCloudSyncState(set, { status: "signed_out", error: error instanceof Error ? error.message : "Failed to verify code" });
+      setCloudSyncState(set, { status: "signed_out", error: error instanceof Error ? error.message : "Failed to sign in" });
+      throw error;
+    }
+  },
+  signUpCloudSync: async (email, password) => {
+    try {
+      await signUpCloudSyncWithPassword(email, password);
+      const user = await getCloudSyncUser();
+      if (user) await refreshCloudSyncState(set);
+      set({ cloudSync: loadCloudSyncMetadata(), error: null });
+    } catch (error) {
+      setCloudSyncState(set, { status: "signed_out", error: error instanceof Error ? error.message : "Failed to create account" });
       throw error;
     }
   },

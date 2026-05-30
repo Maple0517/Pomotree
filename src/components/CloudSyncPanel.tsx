@@ -14,9 +14,9 @@ type CloudSyncCopy = {
   subtitle: string;
   notConfigured: string;
   email: string;
-  code: string;
-  sendCode: string;
-  verify: string;
+  password: string;
+  signIn: string;
+  signUp: string;
   signOut: string;
   backup: string;
   restore: string;
@@ -31,8 +31,9 @@ type CloudSyncCopy = {
   syncing: string;
   error: string;
   success: string;
-  codeSent: string;
-  rateLimited: string;
+  signedIn: string;
+  signedUp: string;
+  emailConfirmation: string;
   restored: string;
 };
 
@@ -42,9 +43,9 @@ const TEXT: Record<AppLanguage, CloudSyncCopy> = {
     subtitle: "Tauri-first Supabase snapshot backup.",
     notConfigured: "Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY.",
     email: "Email",
-    code: "6-digit code",
-    sendCode: "Send code",
-    verify: "Verify & sign in",
+    password: "Password",
+    signIn: "Sign in",
+    signUp: "Create account",
     signOut: "Sign out",
     backup: "Back up now",
     restore: "Restore cloud",
@@ -59,8 +60,9 @@ const TEXT: Record<AppLanguage, CloudSyncCopy> = {
     syncing: "Backing up…",
     error: "Sync error",
     success: "Done",
-    codeSent: "Verification code sent. Check your email inbox and spam folder.",
-    rateLimited: "Too many requests. Please wait a while before sending another code.",
+    signedIn: "Signed in.",
+    signedUp: "Account created. If email confirmation is enabled, confirm the email before signing in.",
+    emailConfirmation: "Email confirmation is required. Confirm your email, then sign in with the password.",
     restored: "Cloud data restored",
   },
   zh: {
@@ -68,9 +70,9 @@ const TEXT: Record<AppLanguage, CloudSyncCopy> = {
     subtitle: "Tauri 优先的 Supabase 快照备份。",
     notConfigured: "Supabase 尚未配置。请设置 NEXT_PUBLIC_SUPABASE_URL 和 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY。",
     email: "邮箱",
-    code: "6 位验证码",
-    sendCode: "发送验证码",
-    verify: "验证并登录",
+    password: "密码",
+    signIn: "密码登录",
+    signUp: "创建账号",
     signOut: "退出登录",
     backup: "立即备份",
     restore: "恢复云端",
@@ -85,8 +87,9 @@ const TEXT: Record<AppLanguage, CloudSyncCopy> = {
     syncing: "正在备份…",
     error: "同步错误",
     success: "完成",
-    codeSent: "验证码已发送，请检查邮箱收件箱和垃圾邮件。",
-    rateLimited: "发送太频繁了，Supabase 已限流，请稍后再试。",
+    signedIn: "已登录。",
+    signedUp: "账号已创建。如项目启用了邮箱确认，请先确认邮件，再用密码登录。",
+    emailConfirmation: "需要先确认邮箱。请打开确认邮件后，再用密码登录。",
     restored: "已恢复云端数据",
   },
 };
@@ -105,15 +108,15 @@ type Notice = { tone: "success" | "error"; text: string };
 function formatCloudSyncError(error: unknown, copy: CloudSyncCopy) {
   const message = error instanceof Error ? error.message : copy.error;
   const normalized = message.toLowerCase();
-  if (normalized.includes("rate limit") || normalized.includes("only request this after")) return copy.rateLimited;
+  if (normalized.includes("email not confirmed") || normalized.includes("confirm")) return copy.emailConfirmation;
   return message;
 }
 
 export function CloudSyncPanel({ language, variant = "dashboard" }: { language: AppLanguage; variant?: Variant }) {
   const {
     cloudSync,
-    sendCloudSyncOtp,
-    verifyCloudSyncOtp,
+    signInCloudSync,
+    signUpCloudSync,
     signOutCloudSync,
     backupToCloud,
     restoreFromCloud,
@@ -121,7 +124,7 @@ export function CloudSyncPanel({ language, variant = "dashboard" }: { language: 
   } = useAppStore();
   const copy = TEXT[language];
   const [email, setEmail] = useState(cloudSync.email ?? "");
-  const [token, setToken] = useState("");
+  const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<Notice | null>(null);
   const configured = isSupabaseConfigured();
@@ -154,17 +157,13 @@ export function CloudSyncPanel({ language, variant = "dashboard" }: { language: 
     }
   };
 
-  const submitEmail = (event: FormEvent) => {
+  const submitSignIn = (event: FormEvent) => {
     event.preventDefault();
-    void run(() => sendCloudSyncOtp(email), copy.codeSent);
+    void run(() => signInCloudSync(email, password), copy.signedIn);
   };
 
-  const submitToken = (event: FormEvent) => {
-    event.preventDefault();
-    void run(async () => {
-      await verifyCloudSyncOtp(email, token);
-      setToken("");
-    });
+  const createAccount = () => {
+    void run(() => signUpCloudSync(email, password), copy.signedUp);
   };
 
   return (
@@ -185,24 +184,20 @@ export function CloudSyncPanel({ language, variant = "dashboard" }: { language: 
       {!configured ? <p className={`text-xs leading-5 ${mutedClass}`}>{copy.notConfigured}</p> : null}
 
       {configured && !signedIn ? (
-        <div className="grid gap-3">
-          <form className="grid gap-2" onSubmit={submitEmail}>
-            <label className="grid gap-1 text-xs font-semibold">
-              <span className={mutedClass}>{copy.email}</span>
-              <input className={inputClass} type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" />
-            </label>
-            <button className={primaryClass} disabled={busy || !email.trim()}>{copy.sendCode}</button>
-          </form>
-          <form className="grid gap-2" onSubmit={submitToken}>
-            <label className="grid gap-1 text-xs font-semibold">
-              <span className={mutedClass}>{copy.code}</span>
-              <input className={inputClass} inputMode="numeric" value={token} onChange={(event) => setToken(event.target.value)} placeholder="123456" />
-            </label>
-            <button className={secondaryClass} disabled={busy || !email.trim() || !token.trim()}>{copy.verify}</button>
-          </form>
+        <form className="grid gap-3" onSubmit={submitSignIn}>
+          <label className="grid gap-1 text-xs font-semibold">
+            <span className={mutedClass}>{copy.email}</span>
+            <input className={inputClass} type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" />
+          </label>
+          <label className="grid gap-1 text-xs font-semibold">
+            <span className={mutedClass}>{copy.password}</span>
+            <input className={inputClass} type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="••••••••" />
+          </label>
+          <button className={primaryClass} disabled={busy || !email.trim() || !password}>{copy.signIn}</button>
+          <button type="button" className={secondaryClass} disabled={busy || !email.trim() || !password} onClick={createAccount}>{copy.signUp}</button>
           {message ? <p className={`rounded-xl px-3 py-2 text-xs leading-5 ${message.tone === "error" ? "bg-[var(--danger-bg)] text-[var(--danger-text)]" : mutedClass}`} role="status">{message.text}</p> : null}
           {cloudSync.error ? <p className="rounded-xl bg-[var(--danger-bg)] px-3 py-2 text-xs leading-5 text-[var(--danger-text)]" role="alert">{formatCloudSyncError(new Error(cloudSync.error), copy)}</p> : null}
-        </div>
+        </form>
       ) : null}
 
       {configured && signedIn ? (

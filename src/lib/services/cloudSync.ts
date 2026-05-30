@@ -159,28 +159,17 @@ export async function getCloudSyncUser(client = getSupabaseBrowserClient()): Pro
   return data.user;
 }
 
-export async function sendCloudSyncOtp(email: string, client = getSupabaseBrowserClient()) {
+export async function signInCloudSyncWithPassword(email: string, password: string, client = getSupabaseBrowserClient()) {
   const normalizedEmail = email.trim().toLowerCase();
   if (!normalizedEmail) throw new Error("Email is required");
+  if (!password) throw new Error("Password is required");
 
-  const { error } = await client.auth.signInWithOtp({
+  const { data, error } = await client.auth.signInWithPassword({
     email: normalizedEmail,
-    options: {
-      shouldCreateUser: true,
-    },
+    password,
   });
   if (error) throw error;
-  updateCloudSyncMetadata({ email: normalizedEmail, error: null });
-}
 
-export async function verifyCloudSyncOtp(email: string, token: string, client = getSupabaseBrowserClient()) {
-  const normalizedEmail = email.trim().toLowerCase();
-  const normalizedToken = token.trim();
-  if (!normalizedEmail) throw new Error("Email is required");
-  if (!normalizedToken) throw new Error("Verification code is required");
-
-  const { data, error } = await client.auth.verifyOtp({ email: normalizedEmail, token: normalizedToken, type: "email" });
-  if (error) throw error;
   const user = data.user ?? (await getCloudSyncUser(client));
   updateCloudSyncMetadata({
     email: user?.email ?? normalizedEmail,
@@ -188,6 +177,25 @@ export async function verifyCloudSyncOtp(email: string, token: string, client = 
     error: null,
   });
   return user;
+}
+
+export async function signUpCloudSyncWithPassword(email: string, password: string, client = getSupabaseBrowserClient()) {
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!normalizedEmail) throw new Error("Email is required");
+  if (!password) throw new Error("Password is required");
+
+  const { data, error } = await client.auth.signUp({
+    email: normalizedEmail,
+    password,
+  });
+  if (error) throw error;
+
+  updateCloudSyncMetadata({
+    email: data.user?.email ?? normalizedEmail,
+    status: data.session ? "idle" : "signed_out",
+    error: null,
+  });
+  return data.user;
 }
 
 export async function signOutCloudSync(client = getSupabaseBrowserClient()) {
