@@ -296,6 +296,13 @@ function OpenDashboardButton({ copy }: { copy: MenubarCopy }) {
   );
 }
 
+function lastActiveSessionTaskId(sessions: FocusSession[], activeTasks: Task[]) {
+  const activeTaskIds = new Set(activeTasks.map((task) => task.id));
+  return sessions
+    .filter((session) => ["completed", "partial", "discarded"].includes(session.status) && session.taskId && activeTaskIds.has(session.taskId))
+    .sort((left, right) => (right.endedAt ?? right.updatedAt).localeCompare(left.endedAt ?? left.updatedAt))[0]?.taskId ?? null;
+}
+
 function SettingsButton({ copy, onClick }: { copy: MenubarCopy; onClick: () => void }) {
   return (
     <button
@@ -314,27 +321,34 @@ function IdleStartForm({
   copy,
   tasks,
   defaultFocusSeconds,
+  defaultTaskId,
   onCanStartChange,
   onStart,
 }: {
   copy: MenubarCopy;
   tasks: Task[];
   defaultFocusSeconds: number;
+  defaultTaskId: string | null;
   onCanStartChange: (canStart: boolean) => void;
   onStart: (taskId: string | null, intention: string, plannedSeconds: number) => Promise<void>;
 }) {
   const [intention, setIntention] = useState("");
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null | undefined>(undefined);
   const [durationPreset, setDurationPreset] = useState<DurationPreset>(defaultFocusSeconds === 3000 ? 50 : 25);
   const [customMinutes, setCustomMinutes] = useState(String(Math.max(1, Math.round(defaultFocusSeconds / 60))));
   const activeTasks = useMemo(() => tasks.filter((task) => task.status !== "archived" && task.status !== "done"), [tasks]);
   const quickTasks = activeTasks.slice(0, 2);
+  const effectiveTaskId = selectedTaskId === undefined ? defaultTaskId : selectedTaskId;
   const plannedSeconds = durationPreset === "custom" ? Math.max(1, Number(customMinutes) || 1) * 60 : durationPreset * 60;
-  const canStart = Boolean(intention.trim() || selectedTaskId);
+  const canStart = Boolean(intention.trim() || effectiveTaskId);
+
+  useEffect(() => {
+    onCanStartChange(canStart);
+  }, [canStart, onCanStartChange]);
 
   const updateIntention = (value: string) => {
     setIntention(value);
-    onCanStartChange(Boolean(value.trim() || selectedTaskId));
+    onCanStartChange(Boolean(value.trim() || effectiveTaskId));
   };
 
   const updateSelectedTaskId = (value: string) => {
@@ -351,7 +365,7 @@ function IdleStartForm({
   const submit = async (event?: FormEvent) => {
     event?.preventDefault();
     if (!canStart) return;
-    await onStart(selectedTaskId, intention.trim(), plannedSeconds);
+    await onStart(effectiveTaskId, intention.trim(), plannedSeconds);
     setIntention("");
   };
 
@@ -376,7 +390,7 @@ function IdleStartForm({
           <div className="relative">
             <select
               id="menubar-task"
-              value={selectedTaskId ?? ""}
+              value={effectiveTaskId ?? ""}
               onChange={(event) => updateSelectedTaskId(event.target.value)}
               className="h-[46px] w-full appearance-none rounded-[9px] border border-[var(--menubar-border-strong)] bg-transparent px-4 pr-10 text-[15px] font-medium outline-none"
             >
@@ -426,7 +440,7 @@ function IdleStartForm({
           <p className="text-[13px] font-bold text-[var(--menubar-muted)]">{copy.recentFocus}</p>
           <div className="grid gap-2">
             {quickTasks.map((task) => {
-              const selected = selectedTaskId === task.id;
+              const selected = effectiveTaskId === task.id;
               return (
                 <button
                   key={task.id}
@@ -929,6 +943,8 @@ export function MenubarApp() {
   }, []);
 
   const activeSession = sessions.find((session) => ["running", "paused", "finishing"].includes(session.status));
+  const activeTasks = useMemo(() => tasks.filter((task) => task.status !== "archived" && task.status !== "done"), [tasks]);
+  const defaultTaskId = useMemo(() => lastActiveSessionTaskId(sessions, activeTasks), [activeTasks, sessions]);
   const mode = menubarMode(activeSession);
   const remainingSeconds = activeSession ? computeRemainingSeconds(activeSession, pauses, now) : settings.defaultFocusSeconds;
   const trayTitle = menubarStatusTitle(activeSession, remainingSeconds);
@@ -1014,7 +1030,8 @@ export function MenubarApp() {
                       tasks={tasks}
                       onSave={(input) => runAction(async () => {
                         await saveFinish(input);
-                        setCanStartIdleFocus(false);
+                        const finalTaskId = input.taskId === undefined ? activeSession.taskId : input.taskId;
+                        setCanStartIdleFocus(Boolean(finalTaskId));
                       }, "Failed to save session")}
                     />
                   ) : (
@@ -1022,6 +1039,7 @@ export function MenubarApp() {
                       copy={copy}
                       tasks={tasks}
                       defaultFocusSeconds={settings.defaultFocusSeconds}
+                      defaultTaskId={defaultTaskId}
                       onCanStartChange={setCanStartIdleFocus}
                       onStart={(taskId, intention, plannedSeconds) => runAction(async () => {
                         await startFocus(taskId, intention, plannedSeconds);

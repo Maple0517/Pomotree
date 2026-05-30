@@ -112,6 +112,12 @@ function EmptyState({ icon, title, action }: { icon: React.ReactNode; title: str
   );
 }
 
+function lastActiveSessionTaskId(sessions: Array<{ taskId: string | null; status: string; endedAt: string | null; updatedAt: string }>, activeTaskIds: Set<string>) {
+  return sessions
+    .filter((session) => ["completed", "partial", "discarded"].includes(session.status) && session.taskId && activeTaskIds.has(session.taskId))
+    .sort((left, right) => (right.endedAt ?? right.updatedAt).localeCompare(left.endedAt ?? left.updatedAt))[0]?.taskId ?? null;
+}
+
 const DASHBOARD_TEXT: Record<AppLanguage, DashboardCopy> = {
   en: {
     add: "Add",
@@ -390,8 +396,10 @@ export default function Home() {
   const activeTaskRows = useMemo(() => getActiveTaskRows(tasks), [tasks]);
   const activeTaskChildrenMap = useMemo(() => getTaskChildrenMap(tasks, { includeArchived: false }), [tasks]);
   const archivedBranchRoots = useMemo(() => getArchivedBranchRoots(tasks), [tasks]);
+  const activeTaskIdSet = useMemo(() => new Set(tasks.filter((task) => task.status !== "archived" && task.status !== "done").map((task) => task.id)), [tasks]);
+  const lastTaskId = useMemo(() => lastActiveSessionTaskId(sessions, activeTaskIdSet), [activeTaskIdSet, sessions]);
   const firstActiveTaskId = activeTaskRows[0]?.task.id ?? null;
-  const defaultTaskId = activeSession?.taskId ?? firstActiveTaskId;
+  const defaultTaskId = activeSession?.taskId ?? lastTaskId ?? firstActiveTaskId;
   const effectiveTaskId = selectedTaskId === undefined ? defaultTaskId : selectedTaskId;
   const finishTaskId = selectedTaskId === undefined ? undefined : selectedTaskId;
   const activeSessionHasArchivedAttribution = activeTask?.status === "archived";
@@ -401,7 +409,6 @@ export default function Home() {
     () => getAutoExpandedTaskIds(tasks, [effectiveTaskId, activeSession?.taskId]),
     [activeSession?.taskId, effectiveTaskId, tasks],
   );
-  const activeTaskIdSet = useMemo(() => new Set(tasks.filter((task) => task.status !== "archived").map((task) => task.id)), [tasks]);
   const effectiveAddingSubtaskParentId = addingSubtaskParentId && activeTaskIdSet.has(addingSubtaskParentId) ? addingSubtaskParentId : null;
   const expandedTaskIds = useMemo(() => {
     const expanded = new Set<string>(autoExpandedTaskIds);
@@ -692,13 +699,13 @@ export default function Home() {
                     <div className="mt-3 flex flex-wrap gap-2">
                       <button
                         className="rounded-full bg-[var(--primary)] px-4 py-2 text-sm font-medium text-[var(--primary-foreground)]"
-                        onClick={() => void saveFinish({ status: "completed", summary, taskId: finishTaskId, markTaskDone }).then(() => { setSummary(""); setSelectedTaskId(undefined); setMarkTaskDone(false); })}
+                        onClick={() => void saveFinish({ status: "completed", summary, taskId: finishTaskId, markTaskDone }).then(() => { setSummary(""); setSelectedTaskId(markTaskDone ? undefined : (finishTaskId === undefined ? activeSession?.taskId ?? null : finishTaskId)); setMarkTaskDone(false); })}
                       >
                         {copy.saveCompleted}
                       </button>
                       <button
                         className="rounded-full border border-[var(--border)] px-4 py-2 text-sm font-medium"
-                        onClick={() => void saveFinish({ status: "partial", summary, taskId: finishTaskId, markTaskDone }).then(() => { setSummary(""); setSelectedTaskId(undefined); setMarkTaskDone(false); })}
+                        onClick={() => void saveFinish({ status: "partial", summary, taskId: finishTaskId, markTaskDone }).then(() => { setSummary(""); setSelectedTaskId(markTaskDone ? undefined : (finishTaskId === undefined ? activeSession?.taskId ?? null : finishTaskId)); setMarkTaskDone(false); })}
                       >
                         {copy.savePartial}
                       </button>
