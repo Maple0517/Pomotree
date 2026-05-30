@@ -31,6 +31,8 @@ type CloudSyncCopy = {
   syncing: string;
   error: string;
   success: string;
+  codeSent: string;
+  rateLimited: string;
   restored: string;
 };
 
@@ -57,6 +59,8 @@ const TEXT: Record<AppLanguage, CloudSyncCopy> = {
     syncing: "Backing up…",
     error: "Sync error",
     success: "Done",
+    codeSent: "Verification code sent. Check your email inbox and spam folder.",
+    rateLimited: "Too many requests. Please wait a while before sending another code.",
     restored: "Cloud data restored",
   },
   zh: {
@@ -81,6 +85,8 @@ const TEXT: Record<AppLanguage, CloudSyncCopy> = {
     syncing: "正在备份…",
     error: "同步错误",
     success: "完成",
+    codeSent: "验证码已发送，请检查邮箱收件箱和垃圾邮件。",
+    rateLimited: "发送太频繁了，Supabase 已限流，请稍后再试。",
     restored: "已恢复云端数据",
   },
 };
@@ -92,6 +98,15 @@ function statusLabel(copy: CloudSyncCopy, status: string) {
   if (status === "error") return copy.error;
   if (status === "conflict") return copy.conflict;
   return copy.signedOut;
+}
+
+type Notice = { tone: "success" | "error"; text: string };
+
+function formatCloudSyncError(error: unknown, copy: CloudSyncCopy) {
+  const message = error instanceof Error ? error.message : copy.error;
+  const normalized = message.toLowerCase();
+  if (normalized.includes("rate limit") || normalized.includes("only request this after")) return copy.rateLimited;
+  return message;
 }
 
 export function CloudSyncPanel({ language, variant = "dashboard" }: { language: AppLanguage; variant?: Variant }) {
@@ -108,7 +123,7 @@ export function CloudSyncPanel({ language, variant = "dashboard" }: { language: 
   const [email, setEmail] = useState(cloudSync.email ?? "");
   const [token, setToken] = useState("");
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<Notice | null>(null);
   const configured = isSupabaseConfigured();
   const signedIn = cloudSync.status !== "signed_out" && Boolean(cloudSync.email);
   const shellClass = variant === "menubar"
@@ -131,9 +146,9 @@ export function CloudSyncPanel({ language, variant = "dashboard" }: { language: 
     setMessage(null);
     try {
       await callback();
-      setMessage(success ?? copy.success);
+      setMessage({ tone: "success", text: success ?? copy.success });
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : copy.error);
+      setMessage({ tone: "error", text: formatCloudSyncError(error, copy) });
     } finally {
       setBusy(false);
     }
@@ -141,7 +156,7 @@ export function CloudSyncPanel({ language, variant = "dashboard" }: { language: 
 
   const submitEmail = (event: FormEvent) => {
     event.preventDefault();
-    void run(() => sendCloudSyncOtp(email));
+    void run(() => sendCloudSyncOtp(email), copy.codeSent);
   };
 
   const submitToken = (event: FormEvent) => {
@@ -185,6 +200,8 @@ export function CloudSyncPanel({ language, variant = "dashboard" }: { language: 
             </label>
             <button className={secondaryClass} disabled={busy || !email.trim() || !token.trim()}>{copy.verify}</button>
           </form>
+          {message ? <p className={`rounded-xl px-3 py-2 text-xs leading-5 ${message.tone === "error" ? "bg-[var(--danger-bg)] text-[var(--danger-text)]" : mutedClass}`} role="status">{message.text}</p> : null}
+          {cloudSync.error ? <p className="rounded-xl bg-[var(--danger-bg)] px-3 py-2 text-xs leading-5 text-[var(--danger-text)]" role="alert">{formatCloudSyncError(new Error(cloudSync.error), copy)}</p> : null}
         </div>
       ) : null}
 
@@ -198,7 +215,7 @@ export function CloudSyncPanel({ language, variant = "dashboard" }: { language: 
           {cloudSync.firstLoginNeedsUpload ? <p className={`text-xs leading-5 ${mutedClass}`}>{copy.firstUpload}</p> : null}
           {cloudSync.status === "conflict" ? <p className="text-xs leading-5 text-[var(--danger-text)]">{cloudSync.error ?? copy.conflict}</p> : null}
           {cloudSync.error && cloudSync.status !== "conflict" ? <p className="text-xs leading-5 text-[var(--danger-text)]">{cloudSync.error}</p> : null}
-          {message ? <p className={`text-xs leading-5 ${mutedClass}`}>{message}</p> : null}
+          {message ? <p className={`text-xs leading-5 ${message.tone === "error" ? "text-[var(--danger-text)]" : mutedClass}`}>{message.text}</p> : null}
           <div className="grid grid-cols-2 gap-2">
             <button type="button" className={primaryClass} disabled={busy || cloudSync.status === "syncing"} onClick={() => void run(() => backupToCloud())}>{copy.backup}</button>
             <button type="button" className={secondaryClass} disabled={busy} onClick={() => void run(restoreFromCloud, copy.restored)}>{copy.restore}</button>

@@ -444,7 +444,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       await sendCloudSyncOtp(email);
       set({ cloudSync: loadCloudSyncMetadata(), error: null });
     } catch (error) {
-      setCloudSyncState(set, { status: "error", error: error instanceof Error ? error.message : "Failed to send verification code" });
+      setCloudSyncState(set, { status: "signed_out", error: error instanceof Error ? error.message : "Failed to send verification code" });
       throw error;
     }
   },
@@ -454,7 +454,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       await refreshCloudSyncState(set);
       set({ cloudSync: loadCloudSyncMetadata(), error: null });
     } catch (error) {
-      setCloudSyncState(set, { status: "error", error: error instanceof Error ? error.message : "Failed to verify code" });
+      setCloudSyncState(set, { status: "signed_out", error: error instanceof Error ? error.message : "Failed to verify code" });
       throw error;
     }
   },
