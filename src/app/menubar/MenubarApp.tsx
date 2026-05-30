@@ -12,7 +12,6 @@ type AppLanguage = NonNullable<UserSettings["language"]>;
 type DurationPreset = 25 | 50 | "custom";
 type ThemeSetting = UserSettings["theme"];
 type MenubarMode = "idle" | "running" | "paused" | "finishing";
-type FinishStatus = "completed" | "partial";
 type MenubarView = "focus" | "settings";
 
 type ActionState = {
@@ -54,7 +53,6 @@ type MenubarCopy = {
   resume: string;
   saveCompleted: string;
   saveCapture: string;
-  savePartial: string;
   saved: string;
   settingsHint: string;
   startFocus: string;
@@ -104,7 +102,6 @@ const TEXT: Record<AppLanguage, MenubarCopy> = {
     resume: "Resume",
     saveCompleted: "Save session completed",
     saveCapture: "Save capture",
-    savePartial: "Save session partial",
     saved: "Saved",
     settingsHint: "Settings are saved locally on this device.",
     startFocus: "Start Focus",
@@ -152,7 +149,6 @@ const TEXT: Record<AppLanguage, MenubarCopy> = {
     resume: "继续",
     saveCompleted: "保存本次完成",
     saveCapture: "保存记录",
-    savePartial: "保存本次部分完成",
     saved: "已保存",
     settingsHint: "设置会保存在本机。",
     startFocus: "开始专注",
@@ -573,7 +569,7 @@ function FinishForm({
   copy: MenubarCopy;
   session: FocusSession;
   tasks: Task[];
-  onSave: (input: { status: FinishStatus; summary: string; taskId?: string | null }) => Promise<void>;
+  onSave: (input: { status: "completed"; summary: string; taskId?: string | null }) => Promise<void>;
 }) {
   const [summary, setSummary] = useState("");
   const [selectedTaskId, setSelectedTaskId] = useState<string | null | undefined>(undefined);
@@ -582,23 +578,21 @@ function FinishForm({
   const effectiveTaskId = selectedTaskId === undefined ? session.taskId : selectedTaskId;
   const summaryLength = summary.length;
 
-  const submit = async (status: FinishStatus) => {
-    await onSave({ status, summary, taskId: selectedTaskId });
+  const submit = async () => {
+    await onSave({ status: "completed", summary, taskId: selectedTaskId });
     setSummary("");
     setSelectedTaskId(undefined);
   };
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
-    const status = submitter?.value === "partial" ? "partial" : "completed";
-    void submit(status);
+    void submit();
   };
 
   const onTextareaKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
       event.preventDefault();
-      void submit("completed");
+      void submit();
     }
   };
 
@@ -710,26 +704,14 @@ function ActionBar({
         >
           {copy.saveCompleted}
         </button>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="submit"
-            form={MENUBAR_FORMS.finish}
-            name="status"
-            value="partial"
-            disabled={busy}
-            className="menubar-button h-11 rounded-[10px] border border-[var(--menubar-border-strong)] bg-transparent px-3 text-[15px] font-semibold text-[var(--menubar-text)] disabled:opacity-75"
-          >
-            {copy.savePartial}
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={onDiscard}
-            className="menubar-button h-11 rounded-[10px] border border-[var(--menubar-border-strong)] bg-transparent px-3 text-[15px] font-semibold text-[var(--menubar-text)] disabled:opacity-75"
-          >
-            {copy.discard}
-          </button>
-        </div>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onDiscard}
+          className="menubar-button h-11 rounded-[10px] border border-[var(--menubar-border-strong)] bg-transparent px-3 text-[15px] font-semibold text-[var(--menubar-text)] disabled:opacity-75"
+        >
+          {copy.discard}
+        </button>
       </div>
     );
   }

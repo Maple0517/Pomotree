@@ -58,7 +58,6 @@ type DashboardCopy = {
   notificationPermission: string;
   notificationPrimary: string;
   openInterruptionPlaceholder: string;
-  partial: string;
   planned: string;
   recentSessions: string;
   root: string;
@@ -68,7 +67,6 @@ type DashboardCopy = {
   resume: string;
   save: string;
   saveCompleted: string;
-  savePartial: string;
   saveTask: string;
   settings: string;
   state: string;
@@ -167,7 +165,6 @@ const DASHBOARD_TEXT: Record<AppLanguage, DashboardCopy> = {
     notificationPermission: "Notification permission",
     notificationPrimary: "In-page completion panel remains primary.",
     openInterruptionPlaceholder: "Capture an intention, a summary, or the next follow-up task...",
-    partial: "Partial",
     planned: "Planned",
     recentSessions: "Recent sessions",
     root: "Root",
@@ -177,7 +174,6 @@ const DASHBOARD_TEXT: Record<AppLanguage, DashboardCopy> = {
     resume: "Resume",
     save: "Save",
     saveCompleted: "Save completed",
-    savePartial: "Save partial",
     saveTask: "Save task",
     settings: "Settings",
     state: "State",
@@ -248,7 +244,6 @@ const DASHBOARD_TEXT: Record<AppLanguage, DashboardCopy> = {
     notificationPermission: "通知权限",
     notificationPrimary: "页面内完成面板仍是主要提醒。",
     openInterruptionPlaceholder: "记录一个意图、总结，或下一步要处理的任务...",
-    partial: "部分完成",
     planned: "计划",
     recentSessions: "最近专注",
     root: "根目录",
@@ -258,7 +253,6 @@ const DASHBOARD_TEXT: Record<AppLanguage, DashboardCopy> = {
     resume: "继续",
     save: "保存",
     saveCompleted: "保存为完成",
-    savePartial: "保存为部分完成",
     saveTask: "保存任务",
     settings: "设置",
     state: "状态",
@@ -703,12 +697,6 @@ export default function Home() {
                       >
                         {copy.saveCompleted}
                       </button>
-                      <button
-                        className="rounded-full border border-[var(--border)] px-4 py-2 text-sm font-medium"
-                        onClick={() => void saveFinish({ status: "partial", summary, taskId: finishTaskId, markTaskDone }).then(() => { setSummary(""); setSelectedTaskId(markTaskDone ? undefined : (finishTaskId === undefined ? activeSession?.taskId ?? null : finishTaskId)); setMarkTaskDone(false); })}
-                      >
-                        {copy.savePartial}
-                      </button>
                     </div>
                   </div>
                 ) : null}
@@ -1052,7 +1040,6 @@ export default function Home() {
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
                   {[
                     [copy.completed, String(todayStats.completedCount)],
-                    [copy.partial, String(todayStats.partialCount)],
                     [copy.focusTime, formatDuration(todayStats.totalFocusSeconds)],
                     [copy.interruptions, String(todayStats.openInterruptionCount)],
                   ].map(([label, value]) => (
