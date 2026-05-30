@@ -22,6 +22,9 @@ type TimelineCopy = {
 };
 
 const DAY_SECONDS = 24 * 60 * 60;
+const TIMELINE_HEIGHT_PX = 900;
+const SESSION_CARD_HEIGHT_PX = 58;
+const SESSION_CARD_GAP_PX = 8;
 
 type TimelineSession = FocusSession & {
   title: string;
@@ -29,6 +32,10 @@ type TimelineSession = FocusSession & {
   startSeconds: number;
   endSeconds: number;
   displaySeconds: number;
+};
+
+type PositionedTimelineSession = TimelineSession & {
+  layoutTopPx: number;
 };
 
 type TimelineGap = {
@@ -132,6 +139,29 @@ function buildDailyTimeline(sessions: FocusSession[], tasks: Task[], day: Date, 
   return { timelineSessions, gaps };
 }
 
+function layoutTimelineSessions(sessions: TimelineSession[]): PositionedTimelineSession[] {
+  const maxTop = TIMELINE_HEIGHT_PX - SESSION_CARD_HEIGHT_PX;
+  const positioned = sessions.map((session) => ({
+    ...session,
+    layoutTopPx: Math.min(maxTop, Math.max(0, (session.startSeconds / DAY_SECONDS) * TIMELINE_HEIGHT_PX)),
+  }));
+
+  for (let index = 1; index < positioned.length; index += 1) {
+    const previous = positioned[index - 1];
+    const current = positioned[index];
+    current.layoutTopPx = Math.max(current.layoutTopPx, previous.layoutTopPx + SESSION_CARD_HEIGHT_PX + SESSION_CARD_GAP_PX);
+  }
+
+  for (let index = positioned.length - 1; index >= 0; index -= 1) {
+    const next = positioned[index + 1];
+    const current = positioned[index];
+    const upperBound = next ? next.layoutTopPx - SESSION_CARD_HEIGHT_PX - SESSION_CARD_GAP_PX : maxTop;
+    current.layoutTopPx = Math.max(0, Math.min(current.layoutTopPx, upperBound));
+  }
+
+  return positioned;
+}
+
 function TimelineMetric({ label, value, tone = "default" }: { label: string; value: string; tone?: "default" | "accent" | "warm" }) {
   const toneClass =
     tone === "accent"
@@ -165,7 +195,8 @@ export function DailyFocusTimeline({
     () => buildDailyTimeline(sessions, tasks, timelineDay, copy.unassigned),
     [copy.unassigned, sessions, tasks, timelineDay],
   );
-  const selectedSession = timelineSessions.find((session) => session.id === selectedSessionId) ?? timelineSessions[0] ?? null;
+  const positionedSessions = useMemo(() => layoutTimelineSessions(timelineSessions), [timelineSessions]);
+  const selectedSession = positionedSessions.find((session) => session.id === selectedSessionId) ?? positionedSessions[0] ?? null;
   const totalSeconds = timelineSessions.reduce((total, session) => total + session.displaySeconds, 0);
   const longestSeconds = timelineSessions.reduce((longest, session) => Math.max(longest, session.displaySeconds), 0);
   const hourMarks = Array.from({ length: 7 }, (_, index) => index * 4);
@@ -221,7 +252,10 @@ export function DailyFocusTimeline({
 
       <div className="mt-6 grid gap-5 2xl:grid-cols-[minmax(0,1fr)_minmax(220px,0.42fr)]">
         <div className="relative min-h-[940px] overflow-hidden rounded-[1.6rem] border border-[var(--border-subtle)] bg-[linear-gradient(180deg,rgba(255,255,255,0.02),var(--surface-soft))] px-3 py-5 sm:px-5">
-          <div className="grid h-[900px] grid-cols-[3.2rem_1rem_minmax(0,1fr)] gap-3 sm:grid-cols-[4.2rem_1rem_minmax(0,1fr)]">
+          <div
+            className="grid grid-cols-[3.2rem_1rem_minmax(0,1fr)] gap-3 sm:grid-cols-[4.2rem_1rem_minmax(0,1fr)]"
+            style={{ height: TIMELINE_HEIGHT_PX }}
+          >
             <div className="relative font-mono text-[11px] text-[var(--muted-strong)]">
               {hourMarks.map((hour) => (
                 <span key={hour} className="absolute -translate-y-1/2 tabular-nums" style={{ top: `${(hour / 24) * 100}%` }}>
@@ -256,19 +290,20 @@ export function DailyFocusTimeline({
                   {copy.idle} · {formatCompactDuration(gap.endSeconds - gap.startSeconds)}
                 </div>
               ))}
-              {timelineSessions.map((session) => {
+              {positionedSessions.map((session) => {
                 const start = new Date(session.startedAt);
                 const end = new Date(session.endedAt ?? session.startedAt);
                 const selected = selectedSession?.id === session.id;
                 return (
                   <button
                     key={session.id}
-                    className={`group absolute left-0 w-full max-w-[31rem] rounded-[1.1rem] border px-3 py-2 text-left transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:-translate-y-0.5 sm:px-3 ${
+                    className={`group absolute left-0 h-[58px] w-full max-w-[31rem] overflow-hidden rounded-[1.1rem] border px-3 py-2 text-left transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:-translate-y-0.5 sm:px-3 ${
                       selected ? "border-[var(--border)] shadow-[0_18px_45px_rgba(10,20,18,0.08)]" : "border-transparent"
                     }`}
                     style={{
-                      top: `${(session.startSeconds / DAY_SECONDS) * 100}%`,
+                      top: session.layoutTopPx,
                       background: `linear-gradient(135deg, ${session.color}22, ${session.color}10)`,
+                      zIndex: selected ? 2 : 1,
                     }}
                     onClick={() => setSelectedSessionId(session.id)}
                   >
