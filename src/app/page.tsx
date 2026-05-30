@@ -8,6 +8,7 @@ import { computeRemainingSeconds, formatClock } from "@/lib/utils/timer";
 import { formatDuration, getTaskStats, getTodayStats } from "@/lib/services/stats";
 import type { TaskLabel, UserSettings } from "@/types/domain";
 import { CloudSyncPanel } from "@/components/CloudSyncPanel";
+import { DailyFocusTimeline } from "@/components/DailyFocusTimeline";
 
 type AppLanguage = NonNullable<UserSettings["language"]>;
 type DashboardCopy = {
@@ -80,11 +81,23 @@ type DashboardCopy = {
   theme: string;
   today: string;
   toggleTaskHint: string;
+  summary: string;
   summaryPlaceholder: string;
   pause: string;
   finish: string;
   idle: string;
   unknownTask: string;
+  totalFocused: string;
+  sessionCount: string;
+  longestSession: string;
+  timeline: string;
+  previousDay: string;
+  nextDay: string;
+  backToToday: string;
+  noSessionsForDay: string;
+  sessionDetail: string;
+  timeRange: string;
+  duration: string;
   completedPomodoros: string;
   collapseArchived: string;
   expandArchived: string;
@@ -203,6 +216,17 @@ const DASHBOARD_TEXT: Record<AppLanguage, DashboardCopy> = {
     finish: "Finish",
     idle: "Idle",
     unknownTask: "Unknown task",
+    totalFocused: "Total focused",
+    sessionCount: "Sessions",
+    longestSession: "Longest",
+    timeline: "Daily focus timeline",
+    previousDay: "Previous day",
+    nextDay: "Next day",
+    backToToday: "Today",
+    noSessionsForDay: "No completed focus sessions on this day.",
+    sessionDetail: "Session detail",
+    timeRange: "Time range",
+    duration: "Duration",
     completedPomodoros: "Completed Pomodoros",
     collapseArchived: "Collapse archived tasks",
     expandArchived: "Expand archived tasks",
@@ -210,6 +234,7 @@ const DASHBOARD_TEXT: Record<AppLanguage, DashboardCopy> = {
     focusCompleteBody: "is ready to finish.",
     session: "session",
     toggleTaskHint: "Click chevron to expand/collapse",
+    summary: "Summary",
     summaryPlaceholder: "What did you actually complete? Summary is optional for MVP.",
     unassigned: "Unassigned / intention",
   },
@@ -286,6 +311,17 @@ const DASHBOARD_TEXT: Record<AppLanguage, DashboardCopy> = {
     finish: "完成",
     idle: "空闲",
     unknownTask: "未知任务",
+    totalFocused: "总专注时长",
+    sessionCount: "专注次数",
+    longestSession: "最长时长",
+    timeline: "分段时间线",
+    previousDay: "前一天",
+    nextDay: "后一天",
+    backToToday: "今天",
+    noSessionsForDay: "这一天还没有已完成的专注记录。",
+    sessionDetail: "专注详情",
+    timeRange: "时间范围",
+    duration: "时长",
     completedPomodoros: "已完成番茄钟",
     collapseArchived: "收起归档任务",
     expandArchived: "展开归档任务",
@@ -293,6 +329,7 @@ const DASHBOARD_TEXT: Record<AppLanguage, DashboardCopy> = {
     focusCompleteBody: "已准备完成。",
     session: "专注记录",
     toggleTaskHint: "点击箭头展开/收起",
+    summary: "总结",
     summaryPlaceholder: "你实际完成了什么？MVP 阶段总结可选。",
     unassigned: "未分配 / 仅意图",
   },
@@ -1100,6 +1137,29 @@ export default function Home() {
                   )
                 ) : null}
               </section>
+
+              <DailyFocusTimeline
+                copy={{
+                  today: copy.today,
+                  idle: copy.idle,
+                  unassigned: copy.unassigned,
+                  totalFocused: copy.totalFocused,
+                  sessionCount: copy.sessionCount,
+                  longestSession: copy.longestSession,
+                  timeline: copy.timeline,
+                  previousDay: copy.previousDay,
+                  nextDay: copy.nextDay,
+                  backToToday: copy.backToToday,
+                  noSessionsForDay: copy.noSessionsForDay,
+                  sessionDetail: copy.sessionDetail,
+                  timeRange: copy.timeRange,
+                  duration: copy.duration,
+                  summary: copy.summary,
+                }}
+                language={language}
+                sessions={sessions}
+                tasks={tasks}
+              />
 
               <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6">
                 <h3 className="text-lg font-semibold">{copy.today}</h3>
