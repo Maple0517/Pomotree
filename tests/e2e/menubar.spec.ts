@@ -10,20 +10,19 @@ test("menubar supports idle start, interruption, pause/resume, finish, and save"
   await page.goto("/menubar", { waitUntil: "networkidle" });
 
   await expect(page.getByText("Ready to focus")).toBeVisible();
-  await page.getByRole("textbox", { name: /What are you focusing on\?|Start with an intention/ }).fill("Menubar e2e focus");
+  await page.getByRole("textbox", { name: "Intent" }).fill("Menubar e2e focus");
   await page.getByRole("button", { name: "Start Focus" }).click();
 
   await expect(page.getByText("Menubar e2e focus")).toBeVisible();
   await expect(page.getByRole("button", { name: "Pause" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Finish" })).toBeVisible();
 
-  await page.getByLabel("Interruption").fill("Menubar e2e interruption");
-  await page.getByLabel("Interruption").press("Enter");
-  await expect(page.getByText("Interruption saved")).toBeVisible();
-  await expect(page.getByText("已记录：Menubar e2e interruption")).toBeVisible();
+  await page.getByLabel("Quick capture").fill("Menubar e2e interruption");
+  await page.getByRole("button", { name: "Save capture" }).click();
+  await expect(page.getByText("Recorded: Menubar e2e interruption")).toBeVisible();
 
   await page.getByRole("button", { name: "Pause" }).click();
-  await expect(page.getByText(/paused/)).toBeVisible();
+  await expect(page.getByText(/Paused/)).toBeVisible();
   await expect(page.getByRole("button", { name: "Resume" })).toBeVisible();
 
   await page.getByRole("button", { name: "Resume" }).click();

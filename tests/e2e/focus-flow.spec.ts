@@ -2,7 +2,8 @@ import { expect, test } from "@playwright/test";
 
 async function selectOptionByText(page: Parameters<Parameters<typeof test>[1]>[0]["page"], label: string, text: string) {
   const value = await page.getByLabel(label).locator("option").evaluateAll((options, expectedText) => {
-    const match = options.find((option) => option.textContent?.trim() === expectedText);
+    const normalize = (value: string | null | undefined) => value?.trim().replace(/^(—\s*)+/, "") ?? "";
+    const match = options.find((option) => normalize(option.textContent) === expectedText);
     return match?.getAttribute("value") ?? null;
   }, text);
 
@@ -19,11 +20,11 @@ async function addTaskPath(page: Parameters<Parameters<typeof test>[1]>[0]["page
 }
 
 function taskRow(page: Parameters<Parameters<typeof test>[1]>[0]["page"], title: string) {
-  return page.locator(`[aria-label="Task row ${title}"]`).first();
+  return page.locator(`[aria-label="Task: ${title}"]`).first();
 }
 
 function moreActions(page: Parameters<Parameters<typeof test>[1]>[0]["page"], title: string) {
-  return taskRow(page, title).locator(`[aria-label="More actions for ${title}"]`);
+  return page.getByLabel(`Settings: ${title}`).first();
 }
 
 async function seedExpiredRunningSession(page: Parameters<Parameters<typeof test>[1]>[0]["page"]) {
@@ -79,7 +80,7 @@ test("start to finish and interruption tracking", async ({ page }) => {
   await addTaskPath(page, "Product / Draft product loop");
 
   await page.getByLabel("Actual attribution").selectOption({ label: "— Draft product loop" });
-  await page.getByRole("button", { name: "Start focus" }).click();
+  await page.getByRole("button", { name: "Focus", exact: true }).click();
   await expect(page.getByText("running", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Finish", exact: true }).click();
@@ -95,7 +96,7 @@ test("start to finish and interruption tracking", async ({ page }) => {
 
 test("refresh restores a running session", async ({ page }) => {
   await addTaskPath(page, "Recovery task");
-  await page.getByRole("button", { name: "Start focus" }).click();
+  await page.getByRole("button", { name: "Focus", exact: true }).click();
   await expect(page.getByText("running")).toBeVisible();
   await page.reload({ waitUntil: "networkidle" });
   await expect(page.getByText("running")).toBeVisible();
@@ -115,13 +116,13 @@ test("finish flow supports attribution correction", async ({ page }) => {
   await addTaskPath(page, "Actual task");
 
   await page.getByLabel("Actual attribution").selectOption({ label: "Planned task" });
-  await page.getByRole("button", { name: "Start focus" }).click();
+  await page.getByRole("button", { name: "Focus", exact: true }).click();
   await page.getByRole("button", { name: "Finish", exact: true }).click();
   await selectOptionByText(page, "Actual attribution", "Actual task");
   await page.getByPlaceholder("What did you actually complete? Summary is optional for MVP.").fill("Corrected the attribution");
   await page.getByRole("button", { name: "Save completed" }).click();
 
-  const recentSession = page.getByLabel("Recent session: Actual task");
+  const recentSession = page.getByLabel("Recent sessions: Actual task");
   await expect(recentSession).toBeVisible();
   await expect(recentSession.getByText("Corrected the attribution")).toBeVisible();
 });
@@ -131,19 +132,19 @@ test("saved session attribution can be corrected from recent history", async ({ 
   await addTaskPath(page, "Corrected history task");
 
   await page.getByLabel("Actual attribution").selectOption({ label: "Original history task" });
-  await page.getByRole("button", { name: "Start focus" }).click();
+  await page.getByRole("button", { name: "Focus", exact: true }).click();
   await page.getByRole("button", { name: "Finish" }).click();
   await page.getByPlaceholder("What did you actually complete? Summary is optional for MVP.").fill("Needs later correction");
   await page.getByRole("button", { name: "Save completed" }).click();
 
-  const originalSession = page.getByLabel("Recent session: Original history task");
+  const originalSession = page.getByLabel("Recent sessions: Original history task");
   await expect(originalSession).toBeVisible();
   await originalSession.getByRole("button", { name: "Correct attribution" }).click();
-  await selectOptionByText(page, "Correct attribution for Original history task", "Corrected history task");
-  await page.getByLabel("Correct attribution for Original history task").locator("..").getByRole("button", { name: "Save" }).click();
+  await selectOptionByText(page, "Correct attribution: Original history task", "Corrected history task");
+  await page.getByLabel("Correct attribution: Original history task").locator("..").getByRole("button", { name: "Save" }).click();
 
-  await expect(page.getByLabel("Recent session: Corrected history task")).toBeVisible();
-  await expect(page.getByLabel("Recent session: Original history task")).toHaveCount(0);
+  await expect(page.getByLabel("Recent sessions: Corrected history task")).toBeVisible();
+  await expect(page.getByLabel("Recent sessions: Original history task")).toHaveCount(0);
 });
 
 test("interruption can be converted into a task", async ({ page }) => {
@@ -163,8 +164,8 @@ test("task tree supports inline rename and move", async ({ page }) => {
 
   await moreActions(page, "Loose task").click();
   await page.getByRole("button", { name: "Edit" }).click();
-  await page.getByLabel("Edit title for Loose task").fill("Moved task");
-  await page.getByLabel("Move Loose task").selectOption({ label: "Project" });
+  await page.getByLabel("Edit: Loose task").fill("Moved task");
+  await taskRow(page, "Loose task").locator('select[aria-label="Task: Loose task"]').selectOption({ label: "Project" });
   await page.getByRole("button", { name: "Save task" }).click();
 
   await expect(taskRow(page, "Moved task")).toBeVisible();
@@ -208,10 +209,15 @@ test("JSON import restores exported data", async ({ page }) => {
   });
 
   await page.getByRole("button", { name: "Import JSON" }).click();
-  await page.getByLabel("Pomotree import JSON").fill(exportJson);
+  await page.getByLabel("Import JSON").fill(exportJson);
   await page.getByRole("button", { name: "Restore data" }).click();
 
   await expect(taskRow(page, "Restored task")).toBeVisible();
   await expect(taskRow(page, "Backup task")).toHaveCount(0);
-  await expect(page.getByRole("heading", { name: "Remaining time 50:00" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Planned 50:00" })).toBeVisible();
+});
+
+test("cloud sync panel shows login entry when signed out", async ({ page }) => {
+  await expect(page.getByRole("region", { name: "Cloud Sync" })).toBeVisible();
+  await expect(page.getByText("Supabase is not configured")).toBeVisible();
 });

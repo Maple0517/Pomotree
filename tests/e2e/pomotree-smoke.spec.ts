@@ -9,11 +9,11 @@ async function addTaskPath(page: Parameters<Parameters<typeof test>[1]>[0]["page
 }
 
 function taskRow(page: Parameters<Parameters<typeof test>[1]>[0]["page"], title: string) {
-  return page.locator(`[aria-label="Task row ${title}"]`).first();
+  return page.locator(`[aria-label="Task: ${title}"]`).first();
 }
 
 function moreActions(page: Parameters<Parameters<typeof test>[1]>[0]["page"], title: string) {
-  return taskRow(page, title).locator(`[aria-label="More actions for ${title}"]`);
+  return page.getByLabel(`Settings: ${title}`).first();
 }
 
 async function seedLegacyArchivedFinishingSession(page: Parameters<Parameters<typeof test>[1]>[0]["page"]) {
@@ -84,7 +84,7 @@ test("smoke flow: create a path, start focus, and save completion", async ({ pag
   await expect(taskRow(page, "Project Alpha")).toBeVisible();
   await expect(taskRow(page, "Draft")).toBeVisible();
 
-  await page.getByRole("button", { name: "Focus Project Alpha" }).click();
+  await page.getByRole("button", { name: "Focus: Project Alpha" }).click();
   await expect(page.getByRole("button", { name: "Pause" })).toBeVisible();
   await expect(page.getByText("running", { exact: true })).toBeVisible();
 
@@ -95,7 +95,7 @@ test("smoke flow: create a path, start focus, and save completion", async ({ pag
   await page.getByLabel("Mark attributed task done").check();
   await page.getByRole("button", { name: "Save completed" }).click();
 
-  await expect(page.getByRole("button", { name: "Start focus" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Focus", exact: true })).toBeVisible();
   await expect(page.getByText("Finish this focus session")).toHaveCount(0);
   await moreActions(page, "Project Alpha").click();
   await expect(page.getByRole("button", { name: "Reopen" })).toBeVisible();
@@ -105,8 +105,8 @@ test("direct subtask creation and done-task actions follow the v1 lifecycle", as
   const taskTree = page.locator("section").filter({ hasText: "Task tree" }).first();
 
   await addTaskPath(page, "Project");
-  await taskTree.getByRole("button", { name: "Add subtask under Project" }).click();
-  await page.getByRole("textbox", { name: "Subtask title under Project" }).fill("Draft");
+  await taskTree.getByRole("button", { name: "Add subtask: Project" }).click();
+  await page.getByRole("textbox", { name: "Add subtask: Project" }).fill("Draft");
   await page.getByRole("button", { name: "Add subtask", exact: true }).click();
 
   await expect(taskRow(page, "Draft")).toBeVisible();
@@ -115,13 +115,13 @@ test("direct subtask creation and done-task actions follow the v1 lifecycle", as
   await page.getByRole("button", { name: "Done" }).click();
   await moreActions(page, "Project").click();
   await expect(page.getByRole("button", { name: "Reopen" })).toBeVisible();
-  await expect(taskTree.getByRole("button", { name: "Focus Project" })).toHaveCount(0);
-  await expect(taskTree.getByRole("button", { name: "Add subtask under Project" })).toHaveCount(0);
+  await expect(taskTree.getByRole("button", { name: "Focus: Project" })).toHaveCount(0);
+  await expect(taskTree.getByRole("button", { name: "Add subtask: Project" })).toHaveCount(0);
   await expect(taskRow(page, "Draft")).toBeVisible();
 
   await page.getByRole("button", { name: "Reopen" }).click();
-  await expect(taskTree.getByRole("button", { name: "Focus Project" })).toBeVisible();
-  await expect(taskTree.getByRole("button", { name: "Add subtask under Project" })).toHaveCount(1);
+  await expect(taskTree.getByRole("button", { name: "Focus: Project" })).toBeVisible();
+  await expect(taskTree.getByRole("button", { name: "Add subtask: Project" })).toHaveCount(1);
 });
 
 test("task tree collapses by depth and auto-expands the selected path", async ({ page }) => {
@@ -132,13 +132,13 @@ test("task tree collapses by depth and auto-expands the selected path", async ({
   await expect(taskRow(page, "Draft")).toBeVisible();
   await expect(taskRow(page, "Review")).toHaveCount(0);
 
-  await taskRow(page, "Project").getByRole("button", { name: "Select Project" }).click();
+  await taskRow(page, "Project").getByRole("button", { name: "Task: Project", exact: true }).click();
   await expect(taskRow(page, "Draft")).toBeVisible();
 
-  await taskTree.getByRole("button", { name: "Expand Draft" }).click();
+  await taskTree.getByRole("button", { name: "Click chevron to expand/collapse: Draft" }).click();
   await expect(taskRow(page, "Review")).toBeVisible();
 
-  await taskTree.getByRole("button", { name: "Collapse Project" }).click();
+  await taskTree.getByRole("button", { name: "Click chevron to expand/collapse: Project" }).click();
   await expect(taskRow(page, "Draft")).toHaveCount(0);
   await expect(taskRow(page, "Review")).toHaveCount(0);
 
@@ -156,12 +156,12 @@ test("archive hides active branch and restore brings it back while keeping histo
   await expect(taskRow(page, "Draft")).toBeVisible();
 
   await page.getByLabel("Actual attribution").selectOption({ label: "— Draft" });
-  await page.getByRole("button", { name: "Start focus" }).click();
+  await page.getByRole("button", { name: "Focus", exact: true }).click();
   await page.getByRole("button", { name: "Finish" }).click();
   await page.getByPlaceholder("What did you actually complete? Summary is optional for MVP.").fill("Archived branch stats");
   await page.getByRole("button", { name: "Save completed" }).click();
 
-  await expect(page.getByLabel("Recent session: Project / Draft")).toBeVisible();
+  await expect(page.getByLabel("Recent sessions: Project / Draft")).toBeVisible();
   await expect(todaySection.locator("div.rounded-2xl").filter({ hasText: /Completed\s*1/ })).toBeVisible();
 
   await moreActions(page, "Project").click();
@@ -170,7 +170,7 @@ test("archive hides active branch and restore brings it back while keeping histo
   await expect(taskRow(page, "Project")).toHaveCount(0);
   await expect(taskRow(page, "Draft")).toHaveCount(0);
   await expect(archivedPanel.locator("p", { hasText: /^Project$/ }).first()).toBeVisible();
-  await expect(archivedPanel.getByText(/1 🍅/)).toBeVisible();
+  await expect(archivedPanel.getByText(/1 · 0 min/)).toBeVisible();
 
   const attributionOptions = await page.locator("#task-attribution option").allTextContents();
   expect(attributionOptions.join(" ")).not.toContain("Project");
@@ -180,7 +180,7 @@ test("archive hides active branch and restore brings it back while keeping histo
 
   await expect(taskRow(page, "Project")).toBeVisible();
   await expect(taskRow(page, "Draft")).toBeVisible();
-  await expect(page.getByLabel("Recent session: Project / Draft")).toBeVisible();
+  await expect(page.getByLabel("Recent sessions: Project / Draft")).toBeVisible();
 });
 
 test("legacy archived finishing session can still be saved without restoring the task", async ({ page }) => {
@@ -196,7 +196,7 @@ test("legacy archived finishing session can still be saved without restoring the
   await page.getByRole("button", { name: "Save completed" }).click();
 
   await expect(page.getByText("Finish this focus session")).toHaveCount(0);
-  await expect(page.getByLabel("Recent session: Legacy archived task")).toBeVisible();
+  await expect(page.getByLabel("Recent sessions: Legacy archived task")).toBeVisible();
   await expect(
     page.locator("section").filter({ hasText: "Archived Tasks" }).locator("p", { hasText: /^Legacy archived task$/ }).first(),
   ).toBeVisible();

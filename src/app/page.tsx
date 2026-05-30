@@ -7,6 +7,7 @@ import { useAppStore } from "@/lib/store/useAppStore";
 import { computeRemainingSeconds, formatClock } from "@/lib/utils/timer";
 import { formatDuration, getTaskStats, getTodayStats } from "@/lib/services/stats";
 import type { UserSettings } from "@/types/domain";
+import { CloudSyncPanel } from "@/components/CloudSyncPanel";
 
 type AppLanguage = NonNullable<UserSettings["language"]>;
 type DashboardCopy = {
@@ -1229,6 +1230,7 @@ export default function Home() {
                 <p className="px-1 text-xs text-[var(--muted)]">
                   {copy.notificationPermission}: {notificationStatus}. {copy.notificationPrimary}
                 </p>
+                <CloudSyncPanel language={language} />
                 <button
                   className="w-full rounded-2xl bg-[var(--primary)] px-4 py-3 text-sm font-medium text-[var(--primary-foreground)]"
                   onClick={async () => {

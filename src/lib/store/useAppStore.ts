@@ -2,6 +2,22 @@
 
 import { create } from "zustand";
 import type { FocusSession, Interruption, Task, TimerPause, UserSettings } from "@/types/domain";
+import {
+  fetchCloudSnapshot,
+  getCloudSyncUser,
+  isSupabaseConfigured,
+  loadCloudSyncMetadata,
+  resetCloudSyncMetadataAfterSignOut,
+  restoreCloudSnapshot,
+  sendCloudSyncOtp,
+  signOutCloudSync,
+  snapshotHasLocalData,
+  subscribeToCloudAuthChanges,
+  updateCloudSyncMetadata,
+  uploadCloudSnapshot,
+  verifyCloudSyncOtp,
+  type CloudSyncMetadata,
+} from "@/lib/services/cloudSync";
 import { createDefaultSettings } from "@/lib/db/defaults";
 import {
   archiveTask,
@@ -35,6 +51,7 @@ interface AppState {
   loading: boolean;
   error: string | null;
   recoveryNotice: RecoveryNotice | null;
+  cloudSync: CloudSyncMetadata;
   settings: UserSettings;
   tasks: Task[];
   sessions: FocusSession[];
@@ -62,11 +79,17 @@ interface AppState {
   convertInterruptionToTask: (interruptionId: string) => Promise<void>;
   exportJson: () => Promise<string>;
   importJson: (json: string) => Promise<void>;
+  sendCloudSyncOtp: (email: string) => Promise<void>;
+  verifyCloudSyncOtp: (email: string, token: string) => Promise<void>;
+  signOutCloudSync: () => Promise<void>;
+  refreshCloudSync: () => Promise<void>;
+  backupToCloud: (options?: { force?: boolean }) => Promise<void>;
+  restoreFromCloud: () => Promise<void>;
 }
 
 async function refresh(set: (state: Partial<AppState>) => void) {
   const state = await loadAppSnapshot();
-  set({ ...state, ready: true, loading: false, error: null });
+  set({ ...state, ready: true, loading: false, error: null, cloudSync: loadCloudSyncMetadata() });
 }
 
 async function refreshAndBroadcast(set: (state: Partial<AppState>) => void) {
@@ -138,11 +161,101 @@ function subscribeToAppStateChanges(onChange: () => void) {
   });
 }
 
+
+let backupTimer: ReturnType<typeof setTimeout> | null = null;
+let backupInFlight = false;
+
+function setCloudSyncState(set: (state: Partial<AppState>) => void, patch: Partial<CloudSyncMetadata>) {
+  const metadata = updateCloudSyncMetadata(patch);
+  set({ cloudSync: metadata });
+  return metadata;
+}
+
+async function refreshCloudSyncState(set: (state: Partial<AppState>) => void) {
+  if (!isSupabaseConfigured()) {
+    set({ cloudSync: loadCloudSyncMetadata() });
+    return;
+  }
+
+  const user = await getCloudSyncUser();
+  if (!user) {
+    set({ cloudSync: resetCloudSyncMetadataAfterSignOut() });
+    return;
+  }
+
+  const snapshot = await exportJson();
+  const cloud = await fetchCloudSnapshot();
+  setCloudSyncState(set, {
+    email: user.email ?? loadCloudSyncMetadata().email,
+    status: cloud && snapshotHasLocalData(snapshot) && !loadCloudSyncMetadata().lastSeenCloudUpdatedAt ? "conflict" : loadCloudSyncMetadata().status === "signed_out" ? "idle" : loadCloudSyncMetadata().status,
+    lastSeenCloudUpdatedAt: loadCloudSyncMetadata().lastSeenCloudUpdatedAt ?? cloud?.snapshot_updated_at ?? null,
+    firstLoginNeedsUpload: !cloud && snapshotHasLocalData(snapshot),
+    error: cloud && snapshotHasLocalData(snapshot) && !loadCloudSyncMetadata().lastSeenCloudUpdatedAt ? "Cloud data already exists. Restore cloud data or overwrite it with this device." : loadCloudSyncMetadata().error,
+  });
+}
+
+async function runCloudBackup(set: (state: Partial<AppState>) => void, options: { force?: boolean } = {}) {
+  if (!isSupabaseConfigured()) return;
+  const user = await getCloudSyncUser();
+  if (!user) {
+    set({ cloudSync: resetCloudSyncMetadataAfterSignOut() });
+    return;
+  }
+
+  if (backupInFlight) {
+    setCloudSyncState(set, { pending: true, status: "queued" });
+    return;
+  }
+
+  backupInFlight = true;
+  setCloudSyncState(set, { pending: false, status: "syncing", error: null, email: user.email ?? loadCloudSyncMetadata().email });
+  try {
+    const snapshot = await exportJson();
+    const row = await uploadCloudSnapshot(snapshot, options);
+    setCloudSyncState(set, {
+      lastSeenCloudUpdatedAt: row.snapshot_updated_at,
+      lastSuccessfulBackupAt: row.snapshot_updated_at,
+      pending: false,
+      status: "idle",
+      error: null,
+      firstLoginNeedsUpload: false,
+    });
+  } catch (error) {
+    const metadata = loadCloudSyncMetadata();
+    setCloudSyncState(set, {
+      pending: true,
+      status: metadata.status === "conflict" ? "conflict" : "error",
+      error: error instanceof Error ? error.message : "Cloud backup failed",
+    });
+  } finally {
+    backupInFlight = false;
+  }
+}
+
+function queueCloudBackup(set: (state: Partial<AppState>) => void) {
+  if (!isSupabaseConfigured()) return;
+  const metadata = loadCloudSyncMetadata();
+  if (metadata.status === "signed_out" || metadata.status === "conflict") return;
+  setCloudSyncState(set, { pending: true, status: "queued" });
+  if (backupTimer) clearTimeout(backupTimer);
+  backupTimer = setTimeout(() => {
+    backupTimer = null;
+    void runCloudBackup(set);
+  }, 600);
+}
+
+async function mutateAndRefresh(set: (state: Partial<AppState>) => void, mutation: () => Promise<unknown>) {
+  await mutation();
+  await refreshAndBroadcast(set);
+  queueCloudBackup(set);
+}
+
 export const useAppStore = create<AppState>((set, get) => ({
   ready: false,
   loading: false,
   error: null,
   recoveryNotice: null,
+  cloudSync: loadCloudSyncMetadata(),
   settings: createDefaultSettings(),
   tasks: [],
   sessions: [],
@@ -153,14 +266,15 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ loading: true, error: null });
     try {
       await refreshAndBroadcast(set);
+      void refreshCloudSyncState(set);
+      queueCloudBackup(set);
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to initialize", loading: false });
     }
   },
   updateSettings: async (input) => {
     try {
-      await updateSettings(input);
-      await refreshAndBroadcast(set);
+      await mutateAndRefresh(set, () => updateSettings(input));
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to update settings" });
       throw error;
@@ -168,8 +282,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   createTask: async (title, parentId = null) => {
     try {
-      await createTask(title, parentId);
-      await refreshAndBroadcast(set);
+      await mutateAndRefresh(set, () => createTask(title, parentId));
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to create task" });
       throw error;
@@ -177,8 +290,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   createTaskPath: async (path) => {
     try {
-      await createTaskPath(path);
-      await refreshAndBroadcast(set);
+      await mutateAndRefresh(set, () => createTaskPath(path));
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to create task path" });
       throw error;
@@ -186,8 +298,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   updateTask: async (taskId, input) => {
     try {
-      await updateTask(taskId, input);
-      await refreshAndBroadcast(set);
+      await mutateAndRefresh(set, () => updateTask(taskId, input));
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to update task" });
       throw error;
@@ -195,8 +306,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   moveTask: async (taskId, parentId) => {
     try {
-      await moveTask(taskId, parentId);
-      await refreshAndBroadcast(set);
+      await mutateAndRefresh(set, () => moveTask(taskId, parentId));
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to move task" });
       throw error;
@@ -204,8 +314,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   archiveTask: async (taskId) => {
     try {
-      await archiveTask(taskId);
-      await refreshAndBroadcast(set);
+      await mutateAndRefresh(set, () => archiveTask(taskId));
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to archive task" });
       throw error;
@@ -213,8 +322,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   restoreTaskBranch: async (taskId) => {
     try {
-      await restoreTaskBranch(taskId);
-      await refreshAndBroadcast(set);
+      await mutateAndRefresh(set, () => restoreTaskBranch(taskId));
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to restore archived branch" });
       throw error;
@@ -222,8 +330,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   changeSessionAttribution: async (sessionId, taskId) => {
     try {
-      await changeSessionAttribution(sessionId, taskId);
-      await refreshAndBroadcast(set);
+      await mutateAndRefresh(set, () => changeSessionAttribution(sessionId, taskId));
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to update session attribution" });
       throw error;
@@ -231,8 +338,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   startFocus: async (taskId = null, intention = null, plannedSeconds) => {
     try {
-      await startFocus(taskId, intention, plannedSeconds);
-      await refreshAndBroadcast(set);
+      await mutateAndRefresh(set, () => startFocus(taskId, intention, plannedSeconds));
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to start focus" });
       throw error;
@@ -240,8 +346,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   pauseSession: async () => {
     try {
-      await pauseSession();
-      await refreshAndBroadcast(set);
+      await mutateAndRefresh(set, pauseSession);
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to pause session" });
       throw error;
@@ -249,8 +354,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   resumeSession: async () => {
     try {
-      await resumeSession();
-      await refreshAndBroadcast(set);
+      await mutateAndRefresh(set, resumeSession);
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to resume session" });
       throw error;
@@ -258,8 +362,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   discardSession: async () => {
     try {
-      await discardSession();
-      await refreshAndBroadcast(set);
+      await mutateAndRefresh(set, discardSession);
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to discard session" });
       throw error;
@@ -267,8 +370,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   requestFinish: async () => {
     try {
-      await requestFinish();
-      await refreshAndBroadcast(set);
+      await mutateAndRefresh(set, requestFinish);
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to finish session" });
       throw error;
@@ -276,8 +378,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   expireRunningSession: async (sessionId) => {
     try {
-      await expireRunningSession(sessionId);
-      await refreshAndBroadcast(set);
+      await mutateAndRefresh(set, () => expireRunningSession(sessionId));
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to expire session" });
       throw error;
@@ -285,8 +386,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   saveFinish: async (input) => {
     try {
-      await saveFinish(input);
-      await refreshAndBroadcast(set);
+      await mutateAndRefresh(set, () => saveFinish(input));
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to save session" });
       throw error;
@@ -299,8 +399,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   importJson: async (json) => {
     try {
       const state = await importJson(json);
-      set({ ...state, ready: true, loading: false, error: null });
+      set({ ...state, ready: true, loading: false, error: null, cloudSync: loadCloudSyncMetadata() });
       broadcastAppStateChange();
+      queueCloudBackup(set);
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to import JSON" });
       throw error;
@@ -308,8 +409,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   createInterruption: async (text) => {
     try {
-      await createInterruption(text);
-      await refreshAndBroadcast(set);
+      await mutateAndRefresh(set, () => createInterruption(text));
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to create interruption" });
       throw error;
@@ -317,8 +417,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   dismissInterruption: async (interruptionId) => {
     try {
-      await dismissInterruption(interruptionId);
-      await refreshAndBroadcast(set);
+      await mutateAndRefresh(set, () => dismissInterruption(interruptionId));
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to dismiss interruption" });
       throw error;
@@ -326,8 +425,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   markInterruptionDone: async (interruptionId) => {
     try {
-      await markInterruptionDone(interruptionId);
-      await refreshAndBroadcast(set);
+      await mutateAndRefresh(set, () => markInterruptionDone(interruptionId));
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to complete interruption" });
       throw error;
@@ -335,10 +433,62 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   convertInterruptionToTask: async (interruptionId) => {
     try {
-      await convertInterruptionToTask(interruptionId);
-      await refreshAndBroadcast(set);
+      await mutateAndRefresh(set, () => convertInterruptionToTask(interruptionId));
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to convert interruption" });
+      throw error;
+    }
+  },
+  sendCloudSyncOtp: async (email) => {
+    try {
+      await sendCloudSyncOtp(email);
+      set({ cloudSync: loadCloudSyncMetadata(), error: null });
+    } catch (error) {
+      setCloudSyncState(set, { status: "error", error: error instanceof Error ? error.message : "Failed to send verification code" });
+      throw error;
+    }
+  },
+  verifyCloudSyncOtp: async (email, token) => {
+    try {
+      await verifyCloudSyncOtp(email, token);
+      await refreshCloudSyncState(set);
+      set({ cloudSync: loadCloudSyncMetadata(), error: null });
+    } catch (error) {
+      setCloudSyncState(set, { status: "error", error: error instanceof Error ? error.message : "Failed to verify code" });
+      throw error;
+    }
+  },
+  signOutCloudSync: async () => {
+    try {
+      await signOutCloudSync();
+      set({ cloudSync: loadCloudSyncMetadata(), error: null });
+    } catch (error) {
+      setCloudSyncState(set, { status: "error", error: error instanceof Error ? error.message : "Failed to sign out" });
+      throw error;
+    }
+  },
+  refreshCloudSync: async () => {
+    try {
+      await refreshCloudSyncState(set);
+    } catch (error) {
+      setCloudSyncState(set, { status: "error", error: error instanceof Error ? error.message : "Failed to refresh cloud sync" });
+      throw error;
+    }
+  },
+  backupToCloud: async (options = {}) => {
+    await runCloudBackup(set, options);
+    const metadata = loadCloudSyncMetadata();
+    if (metadata.status === "error" || metadata.status === "conflict") {
+      throw new Error(metadata.error ?? "Cloud backup failed");
+    }
+  },
+  restoreFromCloud: async () => {
+    try {
+      const { state } = await restoreCloudSnapshot();
+      set({ ...state, ready: true, loading: false, error: null, cloudSync: loadCloudSyncMetadata() });
+      broadcastAppStateChange();
+    } catch (error) {
+      setCloudSyncState(set, { status: "error", error: error instanceof Error ? error.message : "Failed to restore cloud backup" });
       throw error;
     }
   },
@@ -348,4 +498,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 subscribeToAppStateChanges(() => {
   if (useAppStore.getState().loading) return;
   void refresh(useAppStore.setState);
+});
+
+subscribeToCloudAuthChanges(() => {
+  void useAppStore.getState().refreshCloudSync();
 });

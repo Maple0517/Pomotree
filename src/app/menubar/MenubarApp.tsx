@@ -6,6 +6,7 @@ import { getTaskPathIds } from "@/lib/services/taskSelectors";
 import { useAppStore } from "@/lib/store/useAppStore";
 import { computeRemainingSeconds, formatClock } from "@/lib/utils/timer";
 import type { FocusSession, Task, UserSettings } from "@/types/domain";
+import { CloudSyncPanel } from "@/components/CloudSyncPanel";
 
 type AppLanguage = NonNullable<UserSettings["language"]>;
 type DurationPreset = 25 | 50 | "custom";
@@ -856,6 +857,8 @@ function SettingsPanel({ copy, language, settings, onBack, onChangeLanguage, onC
           })}
         </div>
       </section>
+
+      <CloudSyncPanel language={language} variant="menubar" />
     </div>
   );
 }
