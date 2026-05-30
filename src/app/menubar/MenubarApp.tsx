@@ -207,7 +207,7 @@ function invokeTauriCommand(command: string, args?: Record<string, unknown>) {
 }
 
 function PrimaryButton({ children, disabled, form, name, onClick, tone = "default", type = "button", value }: { children: React.ReactNode; disabled?: boolean; form?: string; name?: string; onClick?: () => void; tone?: "default" | "hot"; type?: "button" | "submit"; value?: string }) {
-  const toneClass = tone === "hot" ? "bg-[#ff5a1f] text-white shadow-[0_10px_24px_rgba(255,90,31,0.24)] disabled:bg-[var(--menubar-soft)] disabled:text-[var(--menubar-muted)]" : "bg-[#17191c] text-white shadow-[0_10px_24px_rgba(17,19,21,0.16)] disabled:bg-[var(--menubar-soft)] disabled:text-[var(--menubar-muted)]";
+  const toneClass = tone === "hot" ? "bg-[#ff5a1f] text-white shadow-[0_10px_24px_rgba(255,90,31,0.24)] disabled:bg-[var(--menubar-soft)] disabled:text-[var(--menubar-muted)]" : "menubar-primary-button shadow-[0_10px_24px_rgba(17,19,21,0.16)] disabled:bg-[var(--menubar-soft)] disabled:text-[var(--menubar-muted)]";
 
   return (
     <button
@@ -700,7 +700,7 @@ function ActionBar({
           name="status"
           value="completed"
           disabled={busy}
-          className="menubar-button h-12 w-full rounded-[10px] bg-[#17191c] px-4 text-[16px] font-semibold text-white shadow-[0_10px_24px_rgba(17,19,21,0.16)] disabled:bg-[var(--menubar-soft)] disabled:text-[var(--menubar-muted)]"
+          className="menubar-button h-12 w-full rounded-[10px] menubar-primary-button px-4 text-[16px] font-semibold shadow-[0_10px_24px_rgba(17,19,21,0.16)] disabled:bg-[var(--menubar-soft)] disabled:text-[var(--menubar-muted)]"
         >
           {copy.saveCompleted}
         </button>

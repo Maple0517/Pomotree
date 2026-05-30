@@ -136,7 +136,7 @@ export function CloudSyncPanel({ language, variant = "dashboard" }: { language: 
     ? "h-10 rounded-[10px] border border-[var(--menubar-border-strong)] bg-[var(--menubar-control-bg)] px-3 text-sm font-semibold text-[var(--menubar-text)] outline-none"
     : "mt-2 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 font-medium outline-none";
   const primaryClass = variant === "menubar"
-    ? "menubar-button rounded-[10px] bg-[#17191c] px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
+    ? "menubar-button rounded-[10px] menubar-primary-button px-3 py-2 text-xs font-bold disabled:opacity-50"
     : "rounded-xl bg-[var(--primary)] px-3 py-2 text-xs font-medium text-[var(--primary-foreground)] disabled:opacity-50";
   const secondaryClass = variant === "menubar"
     ? "menubar-button rounded-[10px] border border-[var(--menubar-border-strong)] bg-[var(--menubar-control-bg)] px-3 py-2 text-xs font-bold text-[var(--menubar-text)] disabled:opacity-50"

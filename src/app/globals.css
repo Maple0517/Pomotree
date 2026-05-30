@@ -101,6 +101,8 @@ html.menubar-popover-root {
   --menubar-border-strong: rgba(17, 19, 21, 0.14);
   --menubar-selected-bg: #17191c;
   --menubar-selected-text: #ffffff;
+  --menubar-primary-bg: #17191c;
+  --menubar-primary-text: #ffffff;
   --menubar-control-bg: rgba(255, 255, 255, 0.5);
   background: transparent !important;
 }
@@ -117,6 +119,8 @@ html.menubar-popover-root[data-theme="dark"] {
   --menubar-border-strong: rgba(247, 246, 242, 0.2);
   --menubar-selected-bg: #f7f6f2;
   --menubar-selected-text: #111111;
+  --menubar-primary-bg: #f7f6f2;
+  --menubar-primary-text: #111111;
   --menubar-control-bg: rgba(247, 246, 242, 0.08);
 }
 
@@ -156,6 +160,11 @@ html.menubar-popover-root[data-theme="dark"] .menubar-shell {
 
 .menubar-button {
   transition: transform 140ms ease, filter 140ms ease, border-color 140ms ease, background-color 140ms ease;
+}
+
+.menubar-primary-button {
+  background-color: var(--menubar-primary-bg);
+  color: var(--menubar-primary-text);
 }
 
 .menubar-dashboard-row {
