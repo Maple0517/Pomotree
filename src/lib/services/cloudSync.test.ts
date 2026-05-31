@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
 import { db } from "@/lib/db";
 import { createDefaultSettings } from "@/lib/db/defaults";
 import type { PomotreeExport } from "@/lib/services/pomotree";
@@ -84,6 +85,13 @@ describe("cloud sync snapshot helpers", () => {
       client_id: "client-1",
       updated_at: "2026-05-30T01:00:00.000Z",
     });
+  });
+
+  it("keeps the Supabase schema constraint aligned with the current export version", () => {
+    const migration = readFileSync("supabase/migrations/20260531112618_allow_schema_version_2_snapshots.sql", "utf8");
+
+    expect(makeSnapshot().schemaVersion).toBe(2);
+    expect(migration).toContain("schema_version in (1, 2)");
   });
 
   it("rejects unsupported cloud snapshot schema versions", () => {
