@@ -98,6 +98,13 @@ type DashboardCopy = {
   sessionDetail: string;
   timeRange: string;
   duration: string;
+  pauseDuration: string;
+  status: string;
+  showFullDay: string;
+  showActiveWindow: string;
+  timingAnomaly: string;
+  timingAnomalyCount: string;
+  shortSessions: string;
   completedPomodoros: string;
   collapseArchived: string;
   expandArchived: string;
@@ -227,6 +234,13 @@ const DASHBOARD_TEXT: Record<AppLanguage, DashboardCopy> = {
     sessionDetail: "Session detail",
     timeRange: "Time range",
     duration: "Duration",
+    pauseDuration: "Pause time",
+    status: "Status",
+    showFullDay: "Full day",
+    showActiveWindow: "Active hours",
+    timingAnomaly: "Saved duration exceeds the available time range. The timeline display has been clamped.",
+    timingAnomalyCount: "record needs review",
+    shortSessions: "short records",
     completedPomodoros: "Completed Pomodoros",
     collapseArchived: "Collapse archived tasks",
     expandArchived: "Expand archived tasks",
@@ -322,6 +336,13 @@ const DASHBOARD_TEXT: Record<AppLanguage, DashboardCopy> = {
     sessionDetail: "专注详情",
     timeRange: "时间范围",
     duration: "时长",
+    pauseDuration: "暂停时长",
+    status: "状态",
+    showFullDay: "查看全天",
+    showActiveWindow: "聚焦活动时段",
+    timingAnomaly: "此记录的保存时长与时间范围不一致，时间线已按可用时间范围裁剪。",
+    timingAnomalyCount: "条记录需要检查",
+    shortSessions: "条短记录",
     completedPomodoros: "已完成番茄钟",
     collapseArchived: "收起归档任务",
     expandArchived: "展开归档任务",
@@ -511,7 +532,7 @@ export default function Home() {
       void expireRunningSession(activeSession.id);
     }
   }, [activeSession, activeTaskTitle, copy.focusCompleteBody, copy.focusCompleteNotification, expireRunningSession, notificationStatus, remainingSeconds, settings.enableNotifications]);
-  const todayStats = useMemo(() => getTodayStats(sessions, interruptions), [sessions, interruptions]);
+  const todayStats = useMemo(() => getTodayStats(sessions, pauses, interruptions), [sessions, pauses, interruptions]);
   const taskStatsById = useMemo(() => {
     return new Map(tasks.map((task) => [task.id, getTaskStats(tasks, sessions, task.id)]));
   }, [sessions, tasks]);
@@ -603,11 +624,11 @@ export default function Home() {
 
   return (
     <main className="min-h-[100dvh] bg-[var(--background)] text-[var(--foreground)]">
-      <div className="mx-auto flex min-h-[100dvh] w-full max-w-7xl flex-col px-6 py-6 lg:px-10">
-        <header className="flex items-center justify-between border-b border-[var(--border)] pb-5">
-          <div>
+      <div className="mx-auto flex min-h-[100dvh] w-full max-w-7xl flex-col px-4 py-6 sm:px-6 lg:px-10">
+        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] pb-5">
+          <div className="min-w-0">
             <p className="text-sm font-medium tracking-[0.18em] text-[var(--muted)] uppercase">Pomotree</p>
-            <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">{copy.headerSubtitle}</h1>
+            <h1 className="mt-2 text-2xl font-semibold tracking-tight text-wrap sm:text-3xl">{copy.headerSubtitle}</h1>
           </div>
           <div className="rounded-full border border-[var(--border)] px-3 py-1 text-sm text-[var(--muted)]">
             {loading ? copy.loading : ready ? copy.localFirst : copy.notReady}
@@ -781,7 +802,7 @@ export default function Home() {
                   </button>
                 </div>
                 <form
-                  className="mt-4 flex gap-3"
+                  className="mt-4 flex flex-wrap gap-3"
                   onSubmit={async (event) => {
                     event.preventDefault();
                     await createTaskPath(taskTitle);
@@ -820,7 +841,7 @@ export default function Home() {
                     </button>
                   ))}
                 </div>
-                <div className="mt-5 overflow-visible rounded-2xl border border-[var(--border)]">
+                <div className="mt-5 overflow-hidden rounded-2xl border border-[var(--border)]">
                   {visibleTaskRows.length === 0 ? (
                     <EmptyState icon={<Sprout size={20} strokeWidth={1.8} />} title={selectedLabel ? `${copy.noTasksYet} (${selectedLabel.name})` : copy.noTasksYet} action={copy.addTaskPlaceholder} />
                   ) : (
@@ -848,7 +869,7 @@ export default function Home() {
                                 className="absolute bottom-0 left-5 top-0 border-l border-dashed border-[var(--border-subtle)]"
                               />
                             ) : null}
-                            <div className="flex items-center gap-3">
+                            <div className="flex min-w-0 flex-wrap items-center gap-2 sm:flex-nowrap sm:gap-3">
                               <div className="flex min-w-0 flex-1 items-center gap-2">
                                 <div className="relative z-[1] w-5 shrink-0">
                                   {hasChildren ? (
@@ -894,7 +915,7 @@ export default function Home() {
                                   <Timer size={13} strokeWidth={1.8} aria-hidden="true" /> {stats?.completedCount ?? 0} · {formatDuration(stats?.totalFocusSeconds ?? 0)}
                                 </span>
                               </div>
-                              <div className="ml-auto flex shrink-0 items-center gap-2">
+                              <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-2">
                                 {!isDone ? (
                                   <button
                                     aria-label={`${copy.focus}: ${task.title}`}
@@ -908,7 +929,7 @@ export default function Home() {
                                 {!isDone ? (
                                   <button
                                     aria-label={`${copy.addSubtask}: ${task.title}`}
-                                    className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--muted)] hover:bg-[var(--surface-soft)]"
+                                    className="hidden rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--muted)] hover:bg-[var(--surface-soft)] sm:inline-flex"
                                     onClick={() => {
                                       setExpandedTaskOverrides((current) => ({
                                         ...current,
@@ -1051,18 +1072,18 @@ export default function Home() {
                     </div>
                   )}
                 </div>
-                <div className="mt-4 flex flex-wrap gap-4 text-xs text-[var(--muted)]">
+                <div className="mt-4 flex flex-wrap gap-3 overflow-hidden text-xs text-[var(--muted)]">
                   <span className="inline-flex items-center gap-1.5"><Timer size={13} strokeWidth={1.8} aria-hidden="true" /> = {copy.completedPomodoros}</span>
                   <span>•</span>
-                  <span>{copy.toggleTaskHint}</span>
+                  <span className="min-w-0 truncate">{copy.toggleTaskHint}</span>
                   <span>•</span>
-                  <span>{copy.clickTaskHint}</span>
+                  <span className="min-w-0 truncate">{copy.clickTaskHint}</span>
                 </div>
               </section>
 
               <section className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_1px_0_var(--shadow-line)]">
                 <div className="flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
+                  <div className="flex min-w-0 flex-wrap items-center gap-2 sm:flex-nowrap sm:gap-3">
                     <Archive size={18} strokeWidth={1.8} className="text-[var(--muted)]" aria-hidden="true" />
                     <h3 className="text-lg font-semibold tracking-tight">{copy.archivedTasks}</h3>
                     <span className="rounded-full bg-[var(--surface-soft)] px-2.5 py-1 text-xs font-medium text-[var(--muted)]">
@@ -1154,10 +1175,18 @@ export default function Home() {
                   sessionDetail: copy.sessionDetail,
                   timeRange: copy.timeRange,
                   duration: copy.duration,
+                  pauseDuration: copy.pauseDuration,
+                  status: copy.status,
+                  showFullDay: copy.showFullDay,
+                  showActiveWindow: copy.showActiveWindow,
+                  timingAnomaly: copy.timingAnomaly,
+                  timingAnomalyCount: copy.timingAnomalyCount,
+                  shortSessions: copy.shortSessions,
                   summary: copy.summary,
                 }}
                 language={language}
                 sessions={sessions}
+                pauses={pauses}
                 tasks={tasks}
               />
 

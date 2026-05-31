@@ -223,6 +223,28 @@ describe("pomotree service invariants", () => {
     await expect(saveFinish({ status: "completed", markTaskDone: true })).rejects.toThrow("No finishing session");
   });
 
+  it("recomputes finish duration at save time after time spent on the finishing screen", async () => {
+    const saveTime = Date.now();
+    const startedAt = new Date(saveTime - 2 * 60 * 60 * 1000).toISOString();
+    await db.focusSessions.put(
+      makeSession({
+        id: "long-finishing-dwell",
+        status: "finishing",
+        startedAt,
+        endedAt: null,
+        actualSeconds: 1500,
+        updatedAt: new Date(saveTime - 95 * 60 * 1000).toISOString(),
+      }),
+    );
+
+    const saved = await saveFinish({ status: "completed", summary: "saved late" });
+
+    expect(saved.actualSeconds).toBeGreaterThanOrEqual(7199);
+    expect(saved.actualSeconds).toBeLessThanOrEqual(7201);
+    expect(saved.endedAt).toBeTruthy();
+    expect(new Date(saved.endedAt!).getTime()).toBeGreaterThanOrEqual(saveTime);
+  });
+
   it("keeps saved history snapshots stable after task rename", async () => {
     await seedSettings();
     const task = await createTask("Original name");

@@ -1,7 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { FocusSession, Task } from "@/types/domain";
+import {
+  buildDailyTimelineModel,
+  formatCompactDuration,
+  projectDurationToPercent,
+  projectTimeToPercent,
+  type DailyTimelineModel,
+  type TimelineSessionSummary,
+} from "@/lib/services/timeline";
+import type { FocusSession, Task, TimerPause } from "@/types/domain";
 
 type TimelineCopy = {
   today: string;
@@ -18,42 +26,34 @@ type TimelineCopy = {
   sessionDetail: string;
   timeRange: string;
   duration: string;
+  pauseDuration: string;
+  status: string;
+  showFullDay: string;
+  showActiveWindow: string;
+  timingAnomaly: string;
+  timingAnomalyCount: string;
+  shortSessions: string;
   summary: string;
 };
 
-const DAY_SECONDS = 24 * 60 * 60;
-const BASE_TIMELINE_HEIGHT_PX = 900;
-const MIN_TIMELINE_SCALE = 0.75;
-const MAX_TIMELINE_SCALE = 2.5;
-const TIMELINE_SCALE_STEP = 0.25;
-const SESSION_CARD_HEIGHT_PX = 58;
-const SESSION_GROUP_ROW_HEIGHT_PX = 38;
-const SESSION_GROUP_PADDING_PX = 16;
-const SESSION_CARD_GAP_PX = 8;
+type TimelineAnnotation =
+  | {
+      kind: "session";
+      sessionId: string;
+      idealTopPx: number;
+      layoutTopPx: number;
+    }
+  | {
+      kind: "collapsed";
+      sessionIds: string[];
+      idealTopPx: number;
+      layoutTopPx: number;
+    };
 
-type TimelineSession = FocusSession & {
-  title: string;
-  color: string;
-  startSeconds: number;
-  endSeconds: number;
-  displaySeconds: number;
-};
-
-type TimelineSessionGroup = {
-  id: string;
-  sessions: TimelineSession[];
-  color: string;
-  startSeconds: number;
-  endSeconds: number;
-  layoutTopPx: number;
-  heightPx: number;
-};
-
-type TimelineGap = {
-  id: string;
-  startSeconds: number;
-  endSeconds: number;
-};
+const ANNOTATION_HEIGHT_PX = 42;
+const ANNOTATION_GAP_PX = 8;
+const COLLAPSE_CLUSTER_PX = 140;
+const MAX_VISIBLE_CLUSTER_ITEMS = 3;
 
 function startOfLocalDay(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -77,10 +77,6 @@ function formatDayLabel(date: Date, language: "en" | "zh") {
   }).format(date);
 }
 
-function secondsIntoDay(date: Date) {
-  return date.getHours() * 3600 + date.getMinutes() * 60 + date.getSeconds();
-}
-
 function formatTime(date: Date) {
   return new Intl.DateTimeFormat(undefined, {
     hour: "2-digit",
@@ -89,127 +85,74 @@ function formatTime(date: Date) {
   }).format(date);
 }
 
-function formatCompactDuration(totalSeconds: number) {
-  const roundedMinutes = Math.max(1, Math.round(totalSeconds / 60));
-  if (roundedMinutes < 60) return `${roundedMinutes}m`;
-  const hours = Math.floor(roundedMinutes / 60);
-  const minutes = roundedMinutes % 60;
-  return minutes === 0 ? `${hours}h` : `${hours}h ${minutes}m`;
+function formatRange(start: Date, end: Date) {
+  return `${formatTime(start)}–${formatTime(end)}`;
 }
 
-function taskColorForSession(session: FocusSession, tasks: Task[]) {
-  if (!session.taskId) return "#8b5cf6";
-  const taskIndex = tasks.findIndex((task) => task.id === session.taskId);
-  const palette = ["#16a34a", "#2563eb", "#7c3aed", "#ea580c", "#db2777", "#0891b2"];
-  return palette[Math.max(0, taskIndex) % palette.length];
+function timelineHeightFor(model: DailyTimelineModel) {
+  const hours = (model.viewEnd.getTime() - model.viewStart.getTime()) / (60 * 60 * 1000);
+  return Math.round(Math.min(1080, Math.max(520, hours * 92)));
 }
 
-function buildDailyTimeline(sessions: FocusSession[], tasks: Task[], day: Date, fallbackTitle: string) {
-  const dayStart = startOfLocalDay(day);
-  const dayEnd = addDays(dayStart, 1);
-  const taskTitleById = new Map(tasks.map((task) => [task.id, task.title]));
-  const timelineSessions: TimelineSession[] = sessions
-    .filter((session) => ["completed", "partial"].includes(session.status) && session.endedAt)
-    .map((session) => {
-      const start = new Date(session.startedAt);
-      const end = new Date(session.endedAt ?? session.startedAt);
-      return { session, start, end };
-    })
-    .filter(({ start, end }) => start < dayEnd && end > dayStart)
-    .map(({ session, start, end }) => {
-      const clippedStart = start < dayStart ? dayStart : start;
-      const clippedEnd = end > dayEnd ? dayEnd : end;
-      const startSeconds = secondsIntoDay(clippedStart);
-      const endSeconds = Math.max(startSeconds + 60, secondsIntoDay(clippedEnd));
-      const title = session.taskPathSnapshot ?? session.intention ?? (session.taskId ? taskTitleById.get(session.taskId) : null) ?? fallbackTitle;
+function buildHourMarks(viewStart: Date, viewEnd: Date) {
+  const viewDurationHours = (viewEnd.getTime() - viewStart.getTime()) / (60 * 60 * 1000);
+  const stepHours = viewDurationHours > 14 ? 2 : 1;
+  const marks: Date[] = [];
+  const cursor = new Date(viewStart);
+  cursor.setMinutes(0, 0, 0);
+  if (cursor.getTime() < viewStart.getTime()) cursor.setHours(cursor.getHours() + 1);
 
-      return {
-        ...session,
-        title,
-        color: taskColorForSession(session, tasks),
-        startSeconds,
-        endSeconds: Math.min(DAY_SECONDS, endSeconds),
-        displaySeconds: session.actualSeconds || Math.max(60, (end.getTime() - start.getTime()) / 1000),
-      };
-    })
-    .sort((left, right) => left.startSeconds - right.startSeconds);
-
-  const gaps: TimelineGap[] = [];
-  for (let index = 0; index < timelineSessions.length - 1; index += 1) {
-    const current = timelineSessions[index];
-    const next = timelineSessions[index + 1];
-    if (next.startSeconds - current.endSeconds >= 5 * 60) {
-      gaps.push({
-        id: `${current.id}-${next.id}`,
-        startSeconds: current.endSeconds,
-        endSeconds: next.startSeconds,
-      });
-    }
+  while (cursor.getTime() <= viewEnd.getTime()) {
+    marks.push(new Date(cursor));
+    cursor.setHours(cursor.getHours() + stepHours);
   }
 
-  return { timelineSessions, gaps };
+  return marks;
 }
 
-function groupHeight(sessionCount: number) {
-  return sessionCount === 1
-    ? SESSION_CARD_HEIGHT_PX
-    : SESSION_GROUP_PADDING_PX + sessionCount * SESSION_GROUP_ROW_HEIGHT_PX;
-}
+function buildAnnotations(model: DailyTimelineModel, timelineHeight: number): TimelineAnnotation[] {
+  const viewStartMs = model.viewStart.getTime();
+  const viewEndMs = model.viewEnd.getTime();
+  const items = model.sessions
+    .map((session) => ({
+      sessionId: session.sessionId,
+      idealTopPx: Math.max(
+        0,
+        Math.min(
+          timelineHeight - ANNOTATION_HEIGHT_PX,
+          (projectTimeToPercent(Math.max(session.startAt.getTime(), viewStartMs), viewStartMs, viewEndMs) / 100) * timelineHeight,
+        ),
+      ),
+    }))
+    .sort((left, right) => left.idealTopPx - right.idealTopPx);
 
-function clampTimelineScale(scale: number) {
-  return Math.min(MAX_TIMELINE_SCALE, Math.max(MIN_TIMELINE_SCALE, scale));
-}
-
-function projectedTop(seconds: number, timelineHeight: number) {
-  return (seconds / DAY_SECONDS) * timelineHeight;
-}
-
-function groupTimelineSessions(sessions: TimelineSession[], timelineHeight: number): TimelineSessionGroup[] {
-  const groups: TimelineSessionGroup[] = [];
-
-  for (const session of sessions) {
-    const latestGroup = groups.at(-1);
-    const sessionTop = projectedTop(session.startSeconds, timelineHeight);
-
-    if (!latestGroup || sessionTop >= latestGroup.layoutTopPx + latestGroup.heightPx + SESSION_CARD_GAP_PX) {
-      groups.push({
-        id: session.id,
-        sessions: [session],
-        color: session.color,
-        startSeconds: session.startSeconds,
-        endSeconds: session.endSeconds,
-        layoutTopPx: sessionTop,
-        heightPx: groupHeight(1),
-      });
-      continue;
+  const collapsed: Array<{ kind: "session"; sessionId: string; idealTopPx: number } | { kind: "collapsed"; sessionIds: string[]; idealTopPx: number }> = [];
+  for (let index = 0; index < items.length; ) {
+    const cluster = [items[index]];
+    let nextIndex = index + 1;
+    while (nextIndex < items.length && items[nextIndex].idealTopPx - cluster[0].idealTopPx < COLLAPSE_CLUSTER_PX) {
+      cluster.push(items[nextIndex]);
+      nextIndex += 1;
     }
 
-    latestGroup.sessions.push(session);
-    latestGroup.id = `${latestGroup.id}-${session.id}`;
-    latestGroup.endSeconds = session.endSeconds;
-    latestGroup.heightPx = groupHeight(latestGroup.sessions.length);
+    cluster.slice(0, MAX_VISIBLE_CLUSTER_ITEMS).forEach((item) => collapsed.push({ kind: "session", ...item }));
+    const hidden = cluster.slice(MAX_VISIBLE_CLUSTER_ITEMS);
+    if (hidden.length > 0) {
+      collapsed.push({
+        kind: "collapsed",
+        sessionIds: hidden.map((item) => item.sessionId),
+        idealTopPx: hidden[0].idealTopPx,
+      });
+    }
+    index = nextIndex;
   }
 
-  const positioned = groups.map((group) => ({
-    ...group,
-    layoutTopPx: Math.min(timelineHeight - group.heightPx, Math.max(0, group.layoutTopPx)),
-  }));
-
-  for (let index = 1; index < positioned.length; index += 1) {
-    const previous = positioned[index - 1];
-    const current = positioned[index];
-    current.layoutTopPx = Math.max(current.layoutTopPx, previous.layoutTopPx + previous.heightPx + SESSION_CARD_GAP_PX);
-  }
-
-  for (let index = positioned.length - 1; index >= 0; index -= 1) {
-    const next = positioned[index + 1];
-    const current = positioned[index];
-    const maxTop = timelineHeight - current.heightPx;
-    const upperBound = next ? next.layoutTopPx - current.heightPx - SESSION_CARD_GAP_PX : maxTop;
-    current.layoutTopPx = Math.max(0, Math.min(current.layoutTopPx, upperBound));
-  }
-
-  return positioned;
+  let latestBottom = -Infinity;
+  return collapsed.map((item) => {
+    const layoutTopPx = Math.min(timelineHeight - ANNOTATION_HEIGHT_PX, Math.max(item.idealTopPx, latestBottom + ANNOTATION_GAP_PX));
+    latestBottom = layoutTopPx + ANNOTATION_HEIGHT_PX;
+    return { ...item, layoutTopPx };
+  });
 }
 
 function TimelineMetric({ label, value, tone = "default" }: { label: string; value: string; tone?: "default" | "accent" | "warm" }) {
@@ -228,40 +171,92 @@ function TimelineMetric({ label, value, tone = "default" }: { label: string; val
   );
 }
 
+function SelectedSessionDetail({ copy, selectedSession }: { copy: TimelineCopy; selectedSession: TimelineSessionSummary | null }) {
+  return (
+    <aside className="rounded-[1.6rem] border border-[var(--border-subtle)] bg-[var(--surface-soft)] p-4">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">{copy.sessionDetail}</p>
+      {selectedSession ? (
+        <div className="mt-4 rounded-[1.25rem] bg-[var(--surface)] p-4 shadow-[0_1px_0_var(--shadow-line)]">
+          <div className="flex items-center gap-2">
+            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: selectedSession.color }} aria-hidden="true" />
+            <h4 className="min-w-0 truncate text-sm font-semibold">{selectedSession.title}</h4>
+          </div>
+          <dl className="mt-4 space-y-3 text-sm">
+            <div>
+              <dt className="text-xs text-[var(--muted)]">{copy.timeRange}</dt>
+              <dd className="mt-1 font-mono font-semibold tabular-nums">{formatRange(selectedSession.startAt, selectedSession.endAt)}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-[var(--muted)]">{copy.duration}</dt>
+              <dd className="mt-1 font-semibold">{formatCompactDuration(selectedSession.focusSeconds)}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-[var(--muted)]">{copy.pauseDuration}</dt>
+              <dd className="mt-1 font-semibold">{formatCompactDuration(selectedSession.pauseSeconds)}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-[var(--muted)]">{copy.status}</dt>
+              <dd className="mt-1 font-semibold capitalize">{selectedSession.status}</dd>
+            </div>
+            {selectedSession.summary ? (
+              <div>
+                <dt className="text-xs text-[var(--muted)]">{copy.summary}</dt>
+                <dd className="mt-1 text-[var(--muted-strong)]">{selectedSession.summary}</dd>
+              </div>
+            ) : null}
+          </dl>
+          {selectedSession.hasTimingAnomaly ? (
+            <p className="mt-4 rounded-2xl border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2 text-xs font-medium text-[var(--warning-text)]">
+              {copy.timingAnomaly}
+            </p>
+          ) : null}
+        </div>
+      ) : (
+        <p className="mt-4 rounded-[1.25rem] bg-[var(--surface)] p-4 text-sm text-[var(--muted)]">{copy.noSessionsForDay}</p>
+      )}
+    </aside>
+  );
+}
+
 export function DailyFocusTimeline({
   copy,
   language,
   sessions,
+  pauses,
   tasks,
 }: {
   copy: TimelineCopy;
   language: "en" | "zh";
   sessions: FocusSession[];
+  pauses: TimerPause[];
   tasks: Task[];
 }) {
   const [timelineDay, setTimelineDay] = useState(() => startOfLocalDay(new Date()));
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
-  const [timelineScale, setTimelineScale] = useState(1);
-  const { timelineSessions, gaps } = useMemo(
-    () => buildDailyTimeline(sessions, tasks, timelineDay, copy.unassigned),
-    [copy.unassigned, sessions, tasks, timelineDay],
+  const [showFullDay, setShowFullDay] = useState(false);
+  const model = useMemo(
+    () =>
+      buildDailyTimelineModel({
+        sessions,
+        pauses,
+        tasks,
+        day: timelineDay,
+        fallbackTitle: copy.unassigned,
+        showFullDay,
+      }),
+    [copy.unassigned, pauses, sessions, showFullDay, tasks, timelineDay],
   );
-  const timelineHeight = Math.round(BASE_TIMELINE_HEIGHT_PX * timelineScale);
-  const sessionGroups = useMemo(() => groupTimelineSessions(timelineSessions, timelineHeight), [timelineHeight, timelineSessions]);
-  const selectedSession = timelineSessions.find((session) => session.id === selectedSessionId) ?? timelineSessions[0] ?? null;
-  const totalSeconds = timelineSessions.reduce((total, session) => total + session.displaySeconds, 0);
-  const longestSeconds = timelineSessions.reduce((longest, session) => Math.max(longest, session.displaySeconds), 0);
-  const hourMarks = Array.from({ length: 7 }, (_, index) => index * 4);
+  const selectedSession = model.sessions.find((session) => session.sessionId === selectedSessionId) ?? model.sessions[0] ?? null;
+  const timelineHeight = timelineHeightFor(model);
+  const hourMarks = useMemo(() => buildHourMarks(model.viewStart, model.viewEnd), [model.viewEnd, model.viewStart]);
+  const annotations = useMemo(() => buildAnnotations(model, timelineHeight), [model, timelineHeight]);
+  const viewStartMs = model.viewStart.getTime();
+  const viewEndMs = model.viewEnd.getTime();
   const isToday = isSameLocalDay(timelineDay, new Date());
-  const scaleLabel = language === "zh" ? "比例" : "Scale";
-  const zoomOutLabel = language === "zh" ? "缩小时间线比例" : "Zoom timeline out";
-  const zoomInLabel = language === "zh" ? "放大时间线比例" : "Zoom timeline in";
-  const adjustTimelineScale = (delta: number) => {
-    setTimelineScale((current) => clampTimelineScale(Number((current + delta).toFixed(2))));
-  };
+  const sessionById = new Map(model.sessions.map((session) => [session.sessionId, session]));
 
   return (
-    <section className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[0_1px_0_var(--shadow-line)] sm:p-5">
+    <section aria-label={copy.timeline} className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[0_1px_0_var(--shadow-line)] sm:p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">Timeline</p>
@@ -269,7 +264,7 @@ export function DailyFocusTimeline({
         </div>
         <nav className="flex items-center gap-2" aria-label={copy.timeline}>
           <button
-            className="grid h-9 w-9 place-items-center rounded-full border border-[var(--border)] text-[var(--muted-strong)]"
+            className="grid h-9 w-9 place-items-center rounded-full border border-[var(--border)] text-[var(--muted-strong)] transition hover:bg-[var(--surface-soft)]"
             aria-label={copy.previousDay}
             onClick={() => {
               setTimelineDay((current) => addDays(current, -1));
@@ -280,7 +275,7 @@ export function DailyFocusTimeline({
           </button>
           <p className="min-w-36 text-center text-sm font-semibold tabular-nums">{formatDayLabel(timelineDay, language)}</p>
           <button
-            className="grid h-9 w-9 place-items-center rounded-full border border-[var(--border)] text-[var(--muted-strong)]"
+            className="grid h-9 w-9 place-items-center rounded-full border border-[var(--border)] text-[var(--muted-strong)] transition hover:bg-[var(--surface-soft)]"
             aria-label={copy.nextDay}
             onClick={() => {
               setTimelineDay((current) => addDays(current, 1));
@@ -303,173 +298,154 @@ export function DailyFocusTimeline({
       </div>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-3">
-        <TimelineMetric label={copy.totalFocused} value={formatCompactDuration(totalSeconds)} tone="accent" />
-        <TimelineMetric label={copy.sessionCount} value={String(timelineSessions.length)} />
-        <TimelineMetric label={copy.longestSession} value={formatCompactDuration(longestSeconds)} tone="warm" />
+        <TimelineMetric label={copy.totalFocused} value={formatCompactDuration(model.totalFocusSeconds)} tone="accent" />
+        <TimelineMetric label={copy.sessionCount} value={String(model.sessionCount)} />
+        <TimelineMetric label={copy.longestSession} value={formatCompactDuration(model.longestSessionSeconds)} tone="warm" />
       </div>
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-[1.35rem] bg-[var(--surface-soft)] px-3 py-2">
         <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
-          {scaleLabel} · {Math.round(timelineScale * 100)}%
+          {formatTime(model.viewStart)}–{formatTime(model.viewEnd)}
+          {model.anomalyCount > 0 ? (
+            <span className="ml-2 rounded-full bg-[var(--warning-bg)] px-2 py-1 text-[var(--warning-text)] normal-case tracking-normal">
+              {model.anomalyCount} {copy.timingAnomalyCount}
+            </span>
+          ) : null}
         </p>
-        <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
-          <button
-            className="grid h-8 w-8 place-items-center rounded-full border border-[var(--border)] text-sm font-semibold text-[var(--muted-strong)] disabled:opacity-35"
-            aria-label={zoomOutLabel}
-            disabled={timelineScale <= MIN_TIMELINE_SCALE}
-            onClick={() => adjustTimelineScale(-TIMELINE_SCALE_STEP)}
-          >
-            −
-          </button>
-          <input
-            className="w-28 accent-[var(--accent)] sm:w-44"
-            type="range"
-            min={MIN_TIMELINE_SCALE}
-            max={MAX_TIMELINE_SCALE}
-            step={TIMELINE_SCALE_STEP}
-            value={timelineScale}
-            aria-label={scaleLabel}
-            onChange={(event) => setTimelineScale(clampTimelineScale(Number(event.target.value)))}
-          />
-          <button
-            className="grid h-8 w-8 place-items-center rounded-full border border-[var(--border)] text-sm font-semibold text-[var(--muted-strong)] disabled:opacity-35"
-            aria-label={zoomInLabel}
-            disabled={timelineScale >= MAX_TIMELINE_SCALE}
-            onClick={() => adjustTimelineScale(TIMELINE_SCALE_STEP)}
-          >
-            +
-          </button>
-        </div>
+        <button
+          type="button"
+          className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs font-semibold text-[var(--muted-strong)] transition hover:-translate-y-0.5 hover:border-[var(--accent-border)] hover:text-[var(--accent)]"
+          onClick={() => setShowFullDay((current) => !current)}
+        >
+          {showFullDay ? copy.showActiveWindow : copy.showFullDay}
+        </button>
       </div>
 
-      <div className="mt-6 grid gap-5 2xl:grid-cols-[minmax(0,1fr)_minmax(220px,0.42fr)]">
-        <div
-          className="relative max-h-[720px] min-h-[520px] overflow-y-auto rounded-[1.6rem] border border-[var(--border-subtle)] bg-[linear-gradient(180deg,rgba(255,255,255,0.02),var(--surface-soft))] px-3 py-5 sm:px-5"
-          onWheel={(event) => {
-            if (!event.metaKey && !event.ctrlKey) return;
-            event.preventDefault();
-            adjustTimelineScale(event.deltaY > 0 ? -0.05 : 0.05);
-          }}
-        >
-          <div
-            className="grid grid-cols-[3.2rem_1rem_minmax(0,1fr)] gap-3 sm:grid-cols-[4.2rem_1rem_minmax(0,1fr)]"
-            style={{ height: timelineHeight }}
-          >
+      <div className="mt-6 grid gap-5 2xl:grid-cols-[minmax(0,1fr)_minmax(240px,0.38fr)]">
+        <div className="relative max-h-[760px] min-h-[520px] overflow-y-auto rounded-[1.6rem] border border-[var(--border-subtle)] bg-[linear-gradient(180deg,rgba(255,255,255,0.02),var(--surface-soft))] px-3 py-5 sm:px-5">
+          <div className="grid grid-cols-[4.5rem_1.25rem_minmax(0,1fr)] gap-3" style={{ height: timelineHeight }}>
             <div className="relative font-mono text-[11px] text-[var(--muted-strong)]">
-              {hourMarks.map((hour) => (
-                <span key={hour} className="absolute -translate-y-1/2 tabular-nums" style={{ top: `${(hour / 24) * 100}%` }}>
-                  {String(hour).padStart(2, "0")}:00
+              {hourMarks.map((mark) => (
+                <span
+                  key={mark.toISOString()}
+                  className="absolute -translate-y-1/2 tabular-nums"
+                  style={{ top: `${projectTimeToPercent(mark.getTime(), viewStartMs, viewEndMs)}%` }}
+                >
+                  {formatTime(mark)}
                 </span>
               ))}
-              <span className="absolute bottom-0 -translate-y-0 tabular-nums">24:00</span>
             </div>
-            <div className="relative">
-              <div className="absolute left-1/2 top-0 h-full w-[3px] -translate-x-1/2 rounded-full bg-[var(--border)]" />
-              {timelineSessions.map((session) => (
-                <span
-                  key={session.id}
-                  className="absolute left-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full ring-4 ring-[var(--surface)]"
-                  style={{ top: `${(session.startSeconds / DAY_SECONDS) * 100}%`, backgroundColor: session.color }}
-                  aria-hidden="true"
-                />
-              ))}
+
+            <div className="relative" aria-label="Timeline rail">
+              <div className="absolute left-1/2 top-0 h-full w-[5px] -translate-x-1/2 rounded-full bg-[var(--border)]" />
+              {model.pauseSegments.map((segment) => {
+                const top = projectTimeToPercent(segment.startMs, viewStartMs, viewEndMs);
+                const height = projectDurationToPercent(segment.durationSeconds, viewStartMs, viewEndMs);
+                return (
+                  <span
+                    key={segment.id}
+                    className="absolute left-1/2 w-[11px] -translate-x-1/2 rounded-full bg-[var(--muted)] opacity-40 ring-2 ring-[var(--surface)]"
+                    style={{ top: `${top}%`, height: `max(${height}%, 4px)` }}
+                    aria-hidden="true"
+                  />
+                );
+              })}
+              {model.focusSegments.map((segment) => {
+                const top = projectTimeToPercent(segment.startMs, viewStartMs, viewEndMs);
+                const height = projectDurationToPercent(segment.durationSeconds, viewStartMs, viewEndMs);
+                const visualHeightPx = Math.max((height / 100) * timelineHeight, 3);
+                const hitHeightPx = Math.max(visualHeightPx, 16);
+                const selected = selectedSession?.sessionId === segment.sessionId;
+                return (
+                  <button
+                    key={segment.id}
+                    type="button"
+                    className="absolute left-1/2 w-6 -translate-x-1/2 rounded-full bg-transparent transition hover:scale-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+                    aria-label={`${segment.title} ${formatRange(segment.startAt, segment.endAt)}`}
+                    onClick={() => setSelectedSessionId(segment.sessionId)}
+                    style={{
+                      top: `${top}%`,
+                      height: hitHeightPx,
+                    }}
+                  >
+                    <span
+                      data-testid={`timeline-focus-segment-${segment.sessionId}`}
+                      className="absolute left-1/2 top-0 w-5 -translate-x-1/2 rounded-full ring-[var(--surface)]"
+                      style={{
+                        height: visualHeightPx,
+                        backgroundColor: segment.color,
+                        boxShadow: selected ? `0 0 0 4px ${segment.color}30` : "0 0 0 3px var(--surface)",
+                      }}
+                    />
+                  </button>
+                );
+              })}
             </div>
+
             <div className="relative">
-              {timelineSessions.length === 0 ? (
+              {model.sessions.length === 0 ? (
                 <div className="absolute left-0 top-1/2 max-w-[28ch] -translate-y-1/2 rounded-2xl bg-[var(--surface)] px-4 py-3 text-sm font-medium text-[var(--muted)] shadow-[0_1px_0_var(--shadow-line)]">
                   {copy.noSessionsForDay}
                 </div>
               ) : null}
-              {gaps.map((gap) => (
+
+              {model.idleGaps.map((gap) => (
                 <div
                   key={gap.id}
-                  className="absolute left-3 text-xs font-medium leading-tight text-[var(--muted-strong)]"
-                  style={{ top: `${(((gap.startSeconds + gap.endSeconds) / 2) / DAY_SECONDS) * 100}%` }}
+                  className="absolute left-3 text-xs font-medium leading-tight text-[var(--muted)]"
+                  style={{ top: `${projectTimeToPercent(gap.startMs + (gap.endMs - gap.startMs) / 2, viewStartMs, viewEndMs)}%` }}
                 >
-                  {copy.idle} · {formatCompactDuration(gap.endSeconds - gap.startSeconds)}
+                  {copy.idle} · {formatCompactDuration(gap.durationSeconds)}
                 </div>
               ))}
-              {sessionGroups.map((group) => {
-                const selected = group.sessions.some((session) => selectedSession?.id === session.id);
-                return (
-                  <article
-                    key={group.id}
-                    className={`absolute left-0 w-full max-w-[31rem] overflow-hidden rounded-[1.1rem] border px-3 py-2 transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:-translate-y-0.5 sm:px-3 ${
-                      selected ? "border-[var(--border)] shadow-[0_18px_45px_rgba(10,20,18,0.08)]" : "border-transparent"
-                    }`}
-                    style={{
-                      top: group.layoutTopPx,
-                      height: group.heightPx,
-                      background: `linear-gradient(135deg, ${group.color}22, ${group.color}10)`,
-                      zIndex: selected ? 2 : 1,
-                    }}
-                  >
-                    <span className="absolute bottom-2 left-0 top-2 w-1 rounded-full" style={{ backgroundColor: group.color }} aria-hidden="true" />
-                    <div className="pl-2">
-                      {group.sessions.map((session) => {
-                        const start = new Date(session.startedAt);
-                        const end = new Date(session.endedAt ?? session.startedAt);
-                        const rowSelected = selectedSession?.id === session.id;
 
-                        return (
-                          <button
-                            key={session.id}
-                            className={`flex h-[38px] w-full items-center justify-between gap-3 rounded-xl px-2 text-left transition-colors ${
-                              rowSelected ? "bg-[var(--surface)]/65" : "hover:bg-[var(--surface)]/42"
-                            }`}
-                            onClick={() => setSelectedSessionId(session.id)}
-                          >
-                            <span className="min-w-0">
-                              <span className="block font-mono text-[11px] font-semibold tabular-nums text-[var(--muted-strong)]">
-                                {formatTime(start)} – {formatTime(end)}
-                              </span>
-                              <span className="block truncate text-sm font-semibold text-[var(--foreground)]">{session.title}</span>
-                            </span>
-                            <span className="shrink-0 font-mono text-xs font-semibold tabular-nums" style={{ color: session.color }}>
-                              {formatCompactDuration(session.displaySeconds)}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </article>
+              {annotations.map((annotation) => {
+                if (annotation.kind === "collapsed") {
+                  return (
+                    <button
+                      key={`collapsed-${annotation.sessionIds.join("-")}`}
+                      type="button"
+                      className="absolute left-0 h-[42px] w-full max-w-[31rem] rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface)] px-3 text-left text-xs font-semibold text-[var(--muted-strong)] transition hover:border-[var(--accent-border)] hover:text-[var(--accent)]"
+                      style={{ top: annotation.layoutTopPx }}
+                      onClick={() => setSelectedSessionId(annotation.sessionIds[0] ?? null)}
+                    >
+                      +{annotation.sessionIds.length} {copy.shortSessions}
+                    </button>
+                  );
+                }
+
+                const session = sessionById.get(annotation.sessionId);
+                if (!session) return null;
+                const selected = selectedSession?.sessionId === session.sessionId;
+                return (
+                  <button
+                    key={session.sessionId}
+                    type="button"
+                    className={`absolute left-0 flex h-[42px] w-full max-w-[31rem] items-center justify-between gap-3 rounded-2xl border px-3 text-left transition-all duration-200 hover:-translate-y-0.5 ${
+                      selected
+                        ? "border-[var(--accent-border)] bg-[var(--surface)] shadow-[0_14px_34px_rgba(10,20,18,0.08)]"
+                        : "border-transparent bg-[var(--surface)]/70 hover:border-[var(--border)]"
+                    }`}
+                    style={{ top: annotation.layoutTopPx }}
+                    onClick={() => setSelectedSessionId(session.sessionId)}
+                  >
+                    <span className="min-w-0">
+                      <span className="block font-mono text-[11px] font-semibold tabular-nums text-[var(--muted-strong)]">
+                        {formatRange(session.startAt, session.endAt)}
+                      </span>
+                      <span className="block truncate text-sm font-semibold text-[var(--foreground)]">{session.title}</span>
+                    </span>
+                    <span className="shrink-0 font-mono text-xs font-semibold tabular-nums" style={{ color: session.color }}>
+                      {formatCompactDuration(session.focusSeconds)}
+                    </span>
+                  </button>
                 );
               })}
             </div>
           </div>
         </div>
 
-        <aside className="rounded-[1.6rem] border border-[var(--border-subtle)] bg-[var(--surface-soft)] p-4">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">{copy.sessionDetail}</p>
-          {selectedSession ? (
-            <div className="mt-4 rounded-[1.25rem] bg-[var(--surface)] p-4 shadow-[0_1px_0_var(--shadow-line)]">
-              <div className="flex items-center gap-2">
-                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: selectedSession.color }} aria-hidden="true" />
-                <h4 className="min-w-0 truncate text-sm font-semibold">{selectedSession.title}</h4>
-              </div>
-              <dl className="mt-4 space-y-3 text-sm">
-                <div>
-                  <dt className="text-xs text-[var(--muted)]">{copy.timeRange}</dt>
-                  <dd className="mt-1 font-mono font-semibold tabular-nums">
-                    {formatTime(new Date(selectedSession.startedAt))} – {formatTime(new Date(selectedSession.endedAt ?? selectedSession.startedAt))}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-[var(--muted)]">{copy.duration}</dt>
-                  <dd className="mt-1 font-semibold">{formatCompactDuration(selectedSession.displaySeconds)}</dd>
-                </div>
-                {selectedSession.summary ? (
-                  <div>
-                    <dt className="text-xs text-[var(--muted)]">{copy.summary}</dt>
-                    <dd className="mt-1 text-[var(--muted-strong)]">{selectedSession.summary}</dd>
-                  </div>
-                ) : null}
-              </dl>
-            </div>
-          ) : (
-            <p className="mt-4 rounded-[1.25rem] bg-[var(--surface)] p-4 text-sm text-[var(--muted)]">{copy.noSessionsForDay}</p>
-          )}
-        </aside>
+        <SelectedSessionDetail copy={copy} selectedSession={selectedSession} />
       </div>
     </section>
   );

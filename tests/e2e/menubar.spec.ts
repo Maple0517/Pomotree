@@ -33,6 +33,6 @@ test("menubar supports idle start, interruption, pause/resume, finish, and save"
   await expect(page.getByRole("textbox", { name: "What did you complete?" })).toBeVisible();
 
   await page.getByRole("textbox", { name: "What did you complete?" }).fill("Completed menubar e2e");
-  await page.getByRole("button", { name: "Save completed" }).click();
+  await page.getByRole("button", { name: "Save session completed" }).click();
   await expect(page.getByText("Ready to focus")).toBeVisible();
 });

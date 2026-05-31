@@ -218,6 +218,13 @@ test("JSON import restores exported data", async ({ page }) => {
 });
 
 test("cloud sync panel shows login entry when signed out", async ({ page }) => {
-  await expect(page.getByRole("region", { name: "Cloud Sync" })).toBeVisible();
-  await expect(page.getByText("Supabase is not configured")).toBeVisible();
+  const panel = page.getByRole("region", { name: "Cloud Sync" });
+  await expect(panel).toBeVisible();
+
+  const hasConfiguredSupabase = await panel.getByRole("textbox", { name: "Email" }).isVisible();
+  if (hasConfiguredSupabase) {
+    await expect(panel.getByRole("button", { name: "Sign in" })).toBeVisible();
+  } else {
+    await expect(panel.getByText("Supabase is not configured")).toBeVisible();
+  }
 });

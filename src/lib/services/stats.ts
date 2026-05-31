@@ -1,5 +1,6 @@
 import { endOfDay, isWithinInterval, startOfDay } from "date-fns";
-import type { FocusSession, Interruption, Task } from "@/types/domain";
+import type { FocusSession, Interruption, Task, TimerPause } from "@/types/domain";
+import { sumCanonicalFocusSecondsForRange } from "./timeline";
 
 export interface TodayStats {
   completedCount: number;
@@ -47,14 +48,19 @@ export function getSubtreeTaskIds(tasks: Task[], taskId: string) {
   return ids;
 }
 
-export function getTodayStats(sessions: FocusSession[], interruptions: Interruption[], now = new Date()): TodayStats {
+export function getTodayStats(sessions: FocusSession[], pauses: TimerPause[], interruptions: Interruption[], now = new Date()): TodayStats {
   const todaySessions = sessions.filter((session) => isInLocalDay(session.startedAt, now));
+  const day = getLocalDayRange(now);
+
   return {
     completedCount: todaySessions.filter((session) => session.status === "completed").length,
     partialCount: todaySessions.filter((session) => session.status === "partial").length,
-    totalFocusSeconds: todaySessions
-      .filter((session) => session.status === "completed" || session.status === "partial")
-      .reduce((total, session) => total + session.actualSeconds, 0),
+    totalFocusSeconds: sumCanonicalFocusSecondsForRange({
+      sessions,
+      pauses,
+      start: day.startInclusive,
+      end: day.endExclusive,
+    }),
     openInterruptionCount: interruptions.filter((interruption) => interruption.status === "open" && isInLocalDay(interruption.createdAt, now)).length,
   };
 }
