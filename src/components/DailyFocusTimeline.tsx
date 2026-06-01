@@ -183,6 +183,10 @@ function buildAnnotations(model: DailyTimelineModel, timelineHeight: number): Ti
 
   let latestBottom = -Infinity;
   return collapsed.map((item) => {
+    if (item.kind === "group") {
+      return { ...item, layoutTopPx: item.idealTopPx };
+    }
+
     const layoutTopPx = Math.min(timelineHeight - ANNOTATION_HEIGHT_PX, Math.max(item.idealTopPx, latestBottom + ANNOTATION_GAP_PX));
     latestBottom = layoutTopPx + ANNOTATION_HEIGHT_PX;
     return { ...item, layoutTopPx };
@@ -437,16 +441,21 @@ export function DailyFocusTimeline({
                 }
 
                 const selected = selectedSession ? annotation.sessionIds.includes(selectedSession.sessionId) : false;
+                const annotationEndTop = projectTimeToPercent(annotation.endAt.getTime(), viewStartMs, viewEndMs);
+                const annotationHeightPx = Math.max(
+                  ((annotationEndTop - projectTimeToPercent(annotation.startAt.getTime(), viewStartMs, viewEndMs)) / 100) * timelineHeight,
+                  ANNOTATION_HEIGHT_PX,
+                );
                 return (
                   <button
                     key={annotation.sessionIds.join("-")}
                     type="button"
-                    className={`absolute left-0 flex h-[42px] w-full max-w-[31rem] items-center justify-between gap-3 rounded-2xl border px-3 text-left transition-all duration-200 hover:-translate-y-0.5 ${
+                    className={`absolute left-0 flex w-full max-w-[31rem] items-start justify-between gap-3 rounded-2xl border px-3 py-2 text-left transition-all duration-200 hover:-translate-y-0.5 ${
                       selected
                         ? "border-[var(--accent-border)] bg-[var(--surface)] shadow-[0_14px_34px_rgba(10,20,18,0.08)]"
                         : "border-transparent bg-[var(--surface)]/70 hover:border-[var(--border)]"
                     }`}
-                    style={{ top: annotation.layoutTopPx }}
+                    style={{ top: annotation.layoutTopPx, height: annotationHeightPx }}
                     onClick={() => setSelectedSessionId(annotation.sessionIds[0] ?? null)}
                   >
                     <span className="min-w-0">

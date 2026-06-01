@@ -143,7 +143,8 @@ test("daily timeline uses proportional rail segments and selectable detail", asy
   await expect(timeline.getByRole("button", { name: "Full day" })).toBeVisible();
   await expect(timeline.getByText("Deep work").first()).toBeVisible();
   await expect(timeline.getByText("Quick note").first()).toBeVisible();
-  await expect(timeline.getByRole("button", { name: /09:00.*09:50.*Deep work.*45m/ })).toBeVisible();
+  const mergedAnnotation = timeline.getByRole("button", { name: /09:00.*09:50.*Deep work.*45m/ });
+  await expect(mergedAnnotation).toBeVisible();
 
   const rail = timeline.getByLabel("Timeline rail");
   const shortSegment = rail.locator('button[aria-label*="Quick note"]').first();
@@ -152,6 +153,8 @@ test("daily timeline uses proportional rail segments and selectable detail", asy
   const longBox = await longVisual.boundingBox();
   const shortBox = await shortVisual.boundingBox();
   expect(longBox?.height ?? 0).toBeGreaterThan((shortBox?.height ?? 0) * 1.8);
+  const annotationBox = await mergedAnnotation.boundingBox();
+  expect(Math.abs((annotationBox?.height ?? 0) - (longBox?.height ?? 0))).toBeLessThanOrEqual(2);
 
   await shortSegment.click();
   await expect(timeline.locator("aside").getByText("Quick note")).toBeVisible();
