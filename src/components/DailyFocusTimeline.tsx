@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import {
   buildDailyTimelineModel,
   formatCompactDuration,
-  projectDurationToPercent,
   projectTimeToPercent,
   type DailyTimelineModel,
   type TimelineSessionSummary,
@@ -54,6 +53,8 @@ type TimelineAnnotation =
       idealTopPx: number;
       layoutTopPx: number;
     };
+
+type TimelineAnnotationGroup = Omit<Extract<TimelineAnnotation, { kind: "group" }>, "layoutTopPx">;
 
 const ANNOTATION_HEIGHT_PX = 42;
 const ANNOTATION_GAP_PX = 8;
@@ -116,10 +117,10 @@ function buildHourMarks(viewStart: Date, viewEnd: Date) {
   return marks;
 }
 
-function buildAnnotations(model: DailyTimelineModel, timelineHeight: number): TimelineAnnotation[] {
+function buildAnnotationGroups(model: DailyTimelineModel, timelineHeight: number): TimelineAnnotationGroup[] {
   const viewStartMs = model.viewStart.getTime();
   const viewEndMs = model.viewEnd.getTime();
-  const groups: Array<Omit<Extract<TimelineAnnotation, { kind: "group" }>, "layoutTopPx">> = [];
+  const groups: TimelineAnnotationGroup[] = [];
 
   for (const session of model.sessions) {
     const latest = groups.at(-1);
@@ -154,7 +155,11 @@ function buildAnnotations(model: DailyTimelineModel, timelineHeight: number): Ti
     });
   }
 
-  const items = groups.sort((left, right) => left.idealTopPx - right.idealTopPx);
+  return groups.sort((left, right) => left.idealTopPx - right.idealTopPx);
+}
+
+function buildAnnotations(model: DailyTimelineModel, timelineHeight: number): TimelineAnnotation[] {
+  const items = buildAnnotationGroups(model, timelineHeight);
   const collapsed: Array<Omit<Extract<TimelineAnnotation, { kind: "group" }>, "layoutTopPx"> | { kind: "collapsed"; sessionIds: string[]; idealTopPx: number }> = [];
   for (let index = 0; index < items.length; ) {
     const cluster = [items[index]];
@@ -278,6 +283,7 @@ export function DailyFocusTimeline({
   const selectedSession = model.sessions.find((session) => session.sessionId === selectedSessionId) ?? model.sessions[0] ?? null;
   const timelineHeight = timelineHeightFor(model);
   const hourMarks = useMemo(() => buildHourMarks(model.viewStart, model.viewEnd), [model.viewEnd, model.viewStart]);
+  const annotationGroups = useMemo(() => buildAnnotationGroups(model, timelineHeight), [model, timelineHeight]);
   const annotations = useMemo(() => buildAnnotations(model, timelineHeight), [model, timelineHeight]);
   const viewStartMs = model.viewStart.getTime();
   const viewEndMs = model.viewEnd.getTime();
@@ -366,43 +372,31 @@ export function DailyFocusTimeline({
 
             <div className="relative" aria-label="Timeline rail">
               <div className="absolute left-1/2 top-0 h-full w-[5px] -translate-x-1/2 rounded-full bg-[var(--border)]" />
-              {model.pauseSegments.map((segment) => {
-                const top = projectTimeToPercent(segment.startMs, viewStartMs, viewEndMs);
-                const height = projectDurationToPercent(segment.durationSeconds, viewStartMs, viewEndMs);
-                return (
-                  <span
-                    key={segment.id}
-                    className="absolute left-1/2 w-[11px] -translate-x-1/2 rounded-full bg-[var(--muted)] opacity-40 ring-2 ring-[var(--surface)]"
-                    style={{ top: `${top}%`, height: `max(${height}%, 4px)` }}
-                    aria-hidden="true"
-                  />
-                );
-              })}
-              {model.focusSegments.map((segment) => {
-                const top = projectTimeToPercent(segment.startMs, viewStartMs, viewEndMs);
-                const height = projectDurationToPercent(segment.durationSeconds, viewStartMs, viewEndMs);
-                const visualHeightPx = Math.max((height / 100) * timelineHeight, 3);
+              {annotationGroups.map((group) => {
+                const top = projectTimeToPercent(group.startAt.getTime(), viewStartMs, viewEndMs);
+                const height = projectTimeToPercent(group.endAt.getTime(), viewStartMs, viewEndMs) - top;
+                const visualHeightPx = Math.max((height / 100) * timelineHeight, 18);
                 const hitHeightPx = Math.max(visualHeightPx, 16);
-                const selected = selectedSession?.sessionId === segment.sessionId;
+                const selected = selectedSession ? group.sessionIds.includes(selectedSession.sessionId) : false;
                 return (
                   <button
-                    key={segment.id}
+                    key={group.sessionIds.join("-")}
                     type="button"
                     className="absolute left-1/2 w-6 -translate-x-1/2 rounded-full bg-transparent transition hover:scale-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
-                    aria-label={`${segment.title} ${formatRange(segment.startAt, segment.endAt)}`}
-                    onClick={() => setSelectedSessionId(segment.sessionId)}
+                    aria-label={`${group.title} ${formatRange(group.startAt, group.endAt)}`}
+                    onClick={() => setSelectedSessionId(group.sessionIds[0] ?? null)}
                     style={{
                       top: `${top}%`,
                       height: hitHeightPx,
                     }}
                   >
                     <span
-                      data-testid={`timeline-focus-segment-${segment.sessionId}`}
+                      data-testid={`timeline-focus-segment-${group.sessionIds[0]}`}
                       className="absolute left-1/2 top-0 w-5 -translate-x-1/2 rounded-full ring-[var(--surface)]"
                       style={{
                         height: visualHeightPx,
-                        backgroundColor: segment.color,
-                        boxShadow: selected ? `0 0 0 4px ${segment.color}30` : "0 0 0 3px var(--surface)",
+                        backgroundColor: group.color,
+                        boxShadow: selected ? `0 0 0 4px ${group.color}30` : "0 0 0 3px var(--surface)",
                       }}
                     />
                   </button>
