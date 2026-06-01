@@ -38,8 +38,13 @@ type TimelineCopy = {
 
 type TimelineAnnotation =
   | {
-      kind: "session";
-      sessionId: string;
+      kind: "group";
+      sessionIds: string[];
+      title: string;
+      color: string;
+      startAt: Date;
+      endAt: Date;
+      focusSeconds: number;
       idealTopPx: number;
       layoutTopPx: number;
     }
@@ -54,6 +59,7 @@ const ANNOTATION_HEIGHT_PX = 42;
 const ANNOTATION_GAP_PX = 8;
 const COLLAPSE_CLUSTER_PX = 140;
 const MAX_VISIBLE_CLUSTER_ITEMS = 3;
+const SAME_SECTION_MERGE_GAP_MS = 45 * 60 * 1000;
 
 function startOfLocalDay(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -113,9 +119,31 @@ function buildHourMarks(viewStart: Date, viewEnd: Date) {
 function buildAnnotations(model: DailyTimelineModel, timelineHeight: number): TimelineAnnotation[] {
   const viewStartMs = model.viewStart.getTime();
   const viewEndMs = model.viewEnd.getTime();
-  const items = model.sessions
-    .map((session) => ({
-      sessionId: session.sessionId,
+  const groups: Array<Omit<Extract<TimelineAnnotation, { kind: "group" }>, "layoutTopPx">> = [];
+
+  for (const session of model.sessions) {
+    const latest = groups.at(-1);
+    const canMergeWithLatest =
+      latest &&
+      latest.title === session.title &&
+      latest.color === session.color &&
+      session.startAt.getTime() - latest.endAt.getTime() <= SAME_SECTION_MERGE_GAP_MS;
+
+    if (canMergeWithLatest) {
+      latest.sessionIds.push(session.sessionId);
+      latest.endAt = session.endAt > latest.endAt ? session.endAt : latest.endAt;
+      latest.focusSeconds += session.focusSeconds;
+      continue;
+    }
+
+    groups.push({
+      kind: "group",
+      sessionIds: [session.sessionId],
+      title: session.title,
+      color: session.color,
+      startAt: session.startAt,
+      endAt: session.endAt,
+      focusSeconds: session.focusSeconds,
       idealTopPx: Math.max(
         0,
         Math.min(
@@ -123,10 +151,11 @@ function buildAnnotations(model: DailyTimelineModel, timelineHeight: number): Ti
           (projectTimeToPercent(Math.max(session.startAt.getTime(), viewStartMs), viewStartMs, viewEndMs) / 100) * timelineHeight,
         ),
       ),
-    }))
-    .sort((left, right) => left.idealTopPx - right.idealTopPx);
+    });
+  }
 
-  const collapsed: Array<{ kind: "session"; sessionId: string; idealTopPx: number } | { kind: "collapsed"; sessionIds: string[]; idealTopPx: number }> = [];
+  const items = groups.sort((left, right) => left.idealTopPx - right.idealTopPx);
+  const collapsed: Array<Omit<Extract<TimelineAnnotation, { kind: "group" }>, "layoutTopPx"> | { kind: "collapsed"; sessionIds: string[]; idealTopPx: number }> = [];
   for (let index = 0; index < items.length; ) {
     const cluster = [items[index]];
     let nextIndex = index + 1;
@@ -135,12 +164,12 @@ function buildAnnotations(model: DailyTimelineModel, timelineHeight: number): Ti
       nextIndex += 1;
     }
 
-    cluster.slice(0, MAX_VISIBLE_CLUSTER_ITEMS).forEach((item) => collapsed.push({ kind: "session", ...item }));
+    cluster.slice(0, MAX_VISIBLE_CLUSTER_ITEMS).forEach((item) => collapsed.push(item));
     const hidden = cluster.slice(MAX_VISIBLE_CLUSTER_ITEMS);
     if (hidden.length > 0) {
       collapsed.push({
         kind: "collapsed",
-        sessionIds: hidden.map((item) => item.sessionId),
+        sessionIds: hidden.flatMap((item) => item.sessionIds),
         idealTopPx: hidden[0].idealTopPx,
       });
     }
@@ -253,7 +282,6 @@ export function DailyFocusTimeline({
   const viewStartMs = model.viewStart.getTime();
   const viewEndMs = model.viewEnd.getTime();
   const isToday = isSameLocalDay(timelineDay, new Date());
-  const sessionById = new Map(model.sessions.map((session) => [session.sessionId, session]));
 
   return (
     <section aria-label={copy.timeline} className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[0_1px_0_var(--shadow-line)] sm:p-5">
@@ -414,12 +442,10 @@ export function DailyFocusTimeline({
                   );
                 }
 
-                const session = sessionById.get(annotation.sessionId);
-                if (!session) return null;
-                const selected = selectedSession?.sessionId === session.sessionId;
+                const selected = selectedSession ? annotation.sessionIds.includes(selectedSession.sessionId) : false;
                 return (
                   <button
-                    key={session.sessionId}
+                    key={annotation.sessionIds.join("-")}
                     type="button"
                     className={`absolute left-0 flex h-[42px] w-full max-w-[31rem] items-center justify-between gap-3 rounded-2xl border px-3 text-left transition-all duration-200 hover:-translate-y-0.5 ${
                       selected
@@ -427,16 +453,16 @@ export function DailyFocusTimeline({
                         : "border-transparent bg-[var(--surface)]/70 hover:border-[var(--border)]"
                     }`}
                     style={{ top: annotation.layoutTopPx }}
-                    onClick={() => setSelectedSessionId(session.sessionId)}
+                    onClick={() => setSelectedSessionId(annotation.sessionIds[0] ?? null)}
                   >
                     <span className="min-w-0">
                       <span className="block font-mono text-[11px] font-semibold tabular-nums text-[var(--muted-strong)]">
-                        {formatRange(session.startAt, session.endAt)}
+                        {formatRange(annotation.startAt, annotation.endAt)}
                       </span>
-                      <span className="block truncate text-sm font-semibold text-[var(--foreground)]">{session.title}</span>
+                      <span className="block truncate text-sm font-semibold text-[var(--foreground)]">{annotation.title}</span>
                     </span>
-                    <span className="shrink-0 font-mono text-xs font-semibold tabular-nums" style={{ color: session.color }}>
-                      {formatCompactDuration(session.focusSeconds)}
+                    <span className="shrink-0 font-mono text-xs font-semibold tabular-nums" style={{ color: annotation.color }}>
+                      {formatCompactDuration(annotation.focusSeconds)}
                     </span>
                   </button>
                 );

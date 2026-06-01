@@ -77,6 +77,22 @@ async function seedTimelineData(page: Page) {
           createdAt: timestamps.quickStart,
           updatedAt: timestamps.quickEnd,
         });
+        sessions.put({
+          id: "session-20m",
+          taskId: "task-deep-work",
+          originalTaskId: "task-deep-work",
+          taskPathSnapshot: "Deep work",
+          originalTaskPathSnapshot: "Deep work",
+          intention: null,
+          summary: "Follow-up focused block",
+          plannedSeconds: 1200,
+          actualSeconds: 1200,
+          status: "completed",
+          startedAt: timestamps.deepFollowUpStart,
+          endedAt: timestamps.deepFollowUpEnd,
+          createdAt: timestamps.deepFollowUpStart,
+          updatedAt: timestamps.deepFollowUpEnd,
+        });
         pauses.put({
           id: "pause-25m",
           sessionId: "session-25m",
@@ -102,6 +118,8 @@ async function seedTimelineData(page: Page) {
         pauseStart: todayAt(9, 10),
         pauseEnd: todayAt(9, 15),
         deepEnd: todayAt(9, 30),
+        deepFollowUpStart: todayAt(9, 30),
+        deepFollowUpEnd: todayAt(9, 50),
         quickStart: todayAt(10, 0),
         quickEnd: todayAt(10, 3),
       },
@@ -125,6 +143,7 @@ test("daily timeline uses proportional rail segments and selectable detail", asy
   await expect(timeline.getByRole("button", { name: "Full day" })).toBeVisible();
   await expect(timeline.getByText("Deep work").first()).toBeVisible();
   await expect(timeline.getByText("Quick note").first()).toBeVisible();
+  await expect(timeline.getByRole("button", { name: /09:00.*09:50.*Deep work.*45m/ })).toBeVisible();
 
   const rail = timeline.getByLabel("Timeline rail");
   const shortSegment = rail.locator('button[aria-label*="Quick note"]').first();
