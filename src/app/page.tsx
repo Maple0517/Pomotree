@@ -73,6 +73,11 @@ type DashboardCopy = {
   save: string;
   saveCompleted: string;
   saveTask: string;
+  cloudSync: string;
+  sectionCapture: string;
+  sectionPreferences: string;
+  sectionReview: string;
+  sectionTree: string;
   settings: string;
   state: string;
   system: string;
@@ -149,6 +154,16 @@ function lastActiveSessionTaskId(sessions: Array<{ taskId: string | null; status
     .sort((left, right) => (right.endedAt ?? right.updatedAt).localeCompare(left.endedAt ?? left.updatedAt))[0]?.taskId ?? null;
 }
 
+function sessionStatusText(copy: DashboardCopy, status: string | undefined) {
+  if (!status) return copy.idle;
+  if (status === "running") return copy.focus;
+  if (status === "paused") return copy.pause;
+  if (status === "finishing") return copy.finishSession;
+  if (status === "completed" || status === "partial") return copy.completed;
+  if (status === "discarded") return copy.discard;
+  return status;
+}
+
 const DASHBOARD_TEXT: Record<AppLanguage, DashboardCopy> = {
   en: {
     add: "Add",
@@ -158,14 +173,14 @@ const DASHBOARD_TEXT: Record<AppLanguage, DashboardCopy> = {
     allLabels: "All",
     archive: "Archive",
     archivedTasks: "Archived Tasks",
-    actualAttribution: "Actual attribution",
-    browserNotifications: "Browser notifications",
+    actualAttribution: "Focus task",
+    browserNotifications: "Completion notifications",
     cancel: "Cancel",
     clickTaskHint: "Click task to select",
     completed: "Completed",
     convertToTask: "Convert to task",
     correctAttribution: "Correct attribution",
-    currentArchivedAttribution: "Current archived attribution",
+    currentArchivedAttribution: "Archived task",
     currentFocus: "Current focus",
     dark: "Dark",
     defaultFocusDuration: "Default focus duration",
@@ -178,7 +193,7 @@ const DASHBOARD_TEXT: Record<AppLanguage, DashboardCopy> = {
     focusMinutes: "Focus minutes",
     focusTime: "Focus time",
     finishSession: "Finish this focus session",
-    headerSubtitle: "Focus tree, one session at a time",
+    headerSubtitle: "One focused session at a time",
     importJson: "Import JSON",
     importPlaceholder: "Paste a Pomotree export JSON object",
     intentionLabel: "Intention without a task",
@@ -190,7 +205,7 @@ const DASHBOARD_TEXT: Record<AppLanguage, DashboardCopy> = {
     language: "Language",
     light: "Light",
     loading: "Loading…",
-    localFirst: "Local-first MVP",
+    localFirst: "Saved locally",
     markAttributedDone: "Mark attributed task done",
     markDone: "Mark done",
     noArchivedTasks: "No archived tasks.",
@@ -200,7 +215,7 @@ const DASHBOARD_TEXT: Record<AppLanguage, DashboardCopy> = {
     noTaskSelected: "No task selected",
     notReady: "Not ready",
     notificationPermission: "Notification permission",
-    notificationPrimary: "In-page completion panel remains primary.",
+    notificationPrimary: "The in-app completion panel stays on.",
     openInterruptionPlaceholder: "Capture an intention, a summary, or the next follow-up task...",
     planned: "Planned",
     recentSessions: "Recent sessions",
@@ -212,6 +227,11 @@ const DASHBOARD_TEXT: Record<AppLanguage, DashboardCopy> = {
     save: "Save",
     saveCompleted: "Save completed",
     saveTask: "Save task",
+    cloudSync: "Cloud sync",
+    sectionCapture: "Capture",
+    sectionPreferences: "Preferences",
+    sectionReview: "Review",
+    sectionTree: "Tree",
     settings: "Settings",
     state: "State",
     system: "System",
@@ -260,14 +280,14 @@ const DASHBOARD_TEXT: Record<AppLanguage, DashboardCopy> = {
     allLabels: "全部",
     archive: "归档",
     archivedTasks: "已归档任务",
-    actualAttribution: "实际归属",
-    browserNotifications: "浏览器通知",
+    actualAttribution: "专注任务",
+    browserNotifications: "完成提醒",
     cancel: "取消",
     clickTaskHint: "点击任务进行选择",
     completed: "已完成",
     convertToTask: "转为任务",
     correctAttribution: "修正归属",
-    currentArchivedAttribution: "当前归档归属",
+    currentArchivedAttribution: "已归档任务",
     currentFocus: "当前专注",
     dark: "夜间",
     defaultFocusDuration: "默认专注时长",
@@ -280,7 +300,7 @@ const DASHBOARD_TEXT: Record<AppLanguage, DashboardCopy> = {
     focusMinutes: "专注分钟数",
     focusTime: "专注时长",
     finishSession: "完成这次专注",
-    headerSubtitle: "专注树，一次推进一个番茄钟",
+    headerSubtitle: "一次只推进一个专注",
     importJson: "导入 JSON",
     importPlaceholder: "粘贴 Pomotree 导出的 JSON 对象",
     intentionLabel: "不绑定任务的意图",
@@ -292,7 +312,7 @@ const DASHBOARD_TEXT: Record<AppLanguage, DashboardCopy> = {
     language: "语言",
     light: "日间",
     loading: "加载中…",
-    localFirst: "本地优先 MVP",
+    localFirst: "本地已保存",
     markAttributedDone: "标记归属任务为完成",
     markDone: "标记完成",
     noArchivedTasks: "暂无归档任务。",
@@ -302,7 +322,7 @@ const DASHBOARD_TEXT: Record<AppLanguage, DashboardCopy> = {
     noTaskSelected: "未选择任务",
     notReady: "未就绪",
     notificationPermission: "通知权限",
-    notificationPrimary: "页面内完成面板仍是主要提醒。",
+    notificationPrimary: "页面内完成面板会继续保留。",
     openInterruptionPlaceholder: "记录一个意图、总结，或下一步要处理的任务...",
     planned: "计划",
     recentSessions: "最近专注",
@@ -314,6 +334,11 @@ const DASHBOARD_TEXT: Record<AppLanguage, DashboardCopy> = {
     save: "保存",
     saveCompleted: "保存为完成",
     saveTask: "保存任务",
+    cloudSync: "云同步",
+    sectionCapture: "记录",
+    sectionPreferences: "偏好",
+    sectionReview: "回顾",
+    sectionTree: "任务树",
     settings: "设置",
     state: "状态",
     system: "跟随系统",
@@ -642,22 +667,27 @@ export default function Home() {
           </p>
         ) : null}
 
-        <section className="grid flex-1 items-start gap-6 py-6 lg:grid-cols-[1.2fr_0.8fr] xl:grid-cols-[1.35fr_0.65fr]">
+        <section className="grid flex-1 items-start gap-6 py-6 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_380px]">
           <div className="grid content-start gap-6">
-            <section className="overflow-hidden rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] shadow-[0_1px_0_var(--shadow-line)]">
-              <div className="grid gap-6 p-6 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
+            <section className="relative overflow-hidden rounded-[2.25rem] border border-[var(--border)] bg-[var(--surface)] shadow-[0_22px_80px_rgba(0,0,0,0.08)]">
+              <div className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-[var(--accent-soft)] blur-3xl" aria-hidden="true" />
+              <div className="pointer-events-none absolute bottom-0 left-0 h-px w-full bg-linear-to-r from-transparent via-[var(--accent-border)] to-transparent" aria-hidden="true" />
+              <div className="relative grid gap-7 p-6 sm:p-7 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
                 <div className="min-w-0">
                   <div className="inline-flex items-center gap-2 rounded-full border border-[var(--accent-border)] bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
                     <Timer size={14} strokeWidth={2} aria-hidden="true" />
                     {copy.currentFocus}
                   </div>
-                  <h2 className="mt-4 text-[4.5rem] font-bold leading-none tracking-[-0.07em] sm:text-[6rem]" aria-label={`${copy.planned} ${formatClock(remainingSeconds)}`}>{formatClock(remainingSeconds)}</h2>
-                  <p className="mt-3 max-w-[52ch] truncate text-sm font-medium text-[var(--muted-strong)]">{activeTaskTitle}</p>
+                  <h2 className="mt-5 font-mono text-[5.4rem] font-bold leading-[0.86] tracking-[-0.09em] tabular-nums text-[var(--foreground)] sm:text-[7.25rem]" aria-label={`${copy.planned} ${formatClock(remainingSeconds)}`}>{formatClock(remainingSeconds)}</h2>
+                  <p className="mt-5 max-w-[52ch] truncate text-lg font-semibold tracking-tight text-[var(--foreground)]">{activeTaskTitle}</p>
+                  <p className="mt-2 text-sm font-medium text-[var(--muted)]">
+                    {sessionStatusText(copy, activeSession?.status)} · {copy.planned} {Math.round((activeSession?.plannedSeconds ?? previewPlannedSeconds) / 60)} min
+                  </p>
                 </div>
                 <div className="flex flex-wrap justify-start gap-2 md:max-w-[220px] md:justify-end">
                   {!activeSession ? (
                     <button
-                      className="inline-flex items-center justify-center gap-2 rounded-full bg-[var(--accent)] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_14px_30px_rgba(240,90,50,0.22)] disabled:bg-[var(--surface-soft)] disabled:text-[var(--muted)] disabled:shadow-none"
+                      className="inline-flex items-center justify-center gap-2 rounded-full bg-[var(--accent)] px-6 py-3 text-sm font-semibold text-white shadow-[0_18px_38px_rgba(240,90,50,0.28)] disabled:bg-[var(--surface-soft)] disabled:text-[var(--muted)] disabled:shadow-none"
                       disabled={!canStartFocus}
                       onClick={() => void startFocus(effectiveTaskId ?? null, focusIntention, customPlannedSeconds).then(() => setFocusIntention(""))}
                     >
@@ -665,14 +695,14 @@ export default function Home() {
                     </button>
                   ) : activeSession.status === "paused" ? (
                     <button
-                      className="rounded-full bg-[var(--accent)] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_14px_30px_rgba(240,90,50,0.22)]"
+                      className="rounded-full bg-[var(--accent)] px-6 py-3 text-sm font-semibold text-white shadow-[0_18px_38px_rgba(240,90,50,0.28)]"
                       onClick={() => void resumeSession()}
                     >
                       {copy.resume}
                     </button>
                   ) : activeSession.status === "running" ? (
                     <button
-                      className="rounded-full bg-[var(--accent)] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_14px_30px_rgba(240,90,50,0.22)]"
+                      className="rounded-full bg-[var(--accent)] px-6 py-3 text-sm font-semibold text-white shadow-[0_18px_38px_rgba(240,90,50,0.28)]"
                       onClick={() => void pauseSession()}
                     >
                       {copy.pause}
@@ -696,12 +726,12 @@ export default function Home() {
                   ) : null}
                 </div>
               </div>
-              <div className="grid gap-3 border-y border-[var(--border-subtle)] px-6 py-4 sm:grid-cols-3">
+              <div className="relative grid gap-3 border-y border-[var(--border-subtle)] px-6 py-4 sm:grid-cols-3">
                 <MetricCard label={copy.task} value={activeTaskTitle} tone="accent" />
-                <MetricCard label={copy.state} value={activeSession?.status ?? copy.idle} />
+                <MetricCard label={copy.state} value={sessionStatusText(copy, activeSession?.status)} />
                 <MetricCard label={copy.planned} value={`${(activeSession?.plannedSeconds ?? previewPlannedSeconds) / 60} min`} />
               </div>
-              <div className="grid gap-4 p-6">
+              <div className="relative grid gap-4 p-6 sm:p-7">
                 <div>
                   <label className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]" htmlFor="task-attribution">
                     {copy.actualAttribution}
@@ -791,11 +821,14 @@ export default function Home() {
             </section>
 
             <div className="grid gap-6">
-              <section className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_1px_0_var(--shadow-line)]">
+              <section className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_16px_50px_rgba(0,0,0,0.05)]">
                 <div className="flex items-center justify-between gap-4">
-                  <h3 className="text-lg font-semibold tracking-tight">{copy.taskTree}</h3>
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">{copy.sectionTree}</p>
+                    <h3 className="mt-1 text-2xl font-semibold tracking-[-0.04em]">{copy.taskTree}</h3>
+                  </div>
                   <button
-                    className="rounded-2xl border border-[var(--border)] px-3 py-2 text-sm font-medium text-[var(--muted)] hover:bg-[var(--surface-soft)]"
+                    className="rounded-full border border-[var(--border)] px-4 py-2 text-sm font-semibold text-[var(--muted-strong)] hover:bg-[var(--surface-soft)]"
                     onClick={() => taskInputRef.current?.focus()}
                   >
                     + {copy.task}
@@ -841,7 +874,7 @@ export default function Home() {
                     </button>
                   ))}
                 </div>
-                <div className="mt-5 overflow-hidden rounded-2xl border border-[var(--border)]">
+                <div className="mt-5 overflow-hidden rounded-[1.6rem] border border-[var(--border)] bg-[var(--surface-soft)] p-1">
                   {visibleTaskRows.length === 0 ? (
                     <EmptyState icon={<Sprout size={20} strokeWidth={1.8} />} title={selectedLabel ? `${copy.noTasksYet} (${selectedLabel.name})` : copy.noTasksYet} action={copy.addTaskPlaceholder} />
                   ) : (
@@ -856,11 +889,9 @@ export default function Home() {
                           <div
                             key={task.id}
                             aria-label={`${copy.task}: ${task.title}`}
-                            className={`relative px-3 py-2.5 transition-colors hover:bg-[var(--surface-soft)] ${
-                              isSelected ? "bg-[var(--surface-soft)]" : "bg-[var(--surface)]"
-                            } ${rowIndex === 0 ? "rounded-t-2xl" : "border-t border-[var(--border-subtle)]"} ${
-                              rowIndex === visibleTaskRows.length - 1 ? "rounded-b-2xl" : ""
-                            }`}
+                            className={`relative rounded-[1.15rem] px-3 py-2.5 transition-colors hover:bg-[var(--surface)] ${
+                              isSelected ? "bg-[var(--surface)] shadow-[0_1px_0_var(--shadow-line),0_12px_30px_rgba(0,0,0,0.05)] ring-1 ring-[var(--accent-border)]" : ""
+                            } ${rowIndex > 0 ? "mt-1" : ""}`}
                             style={{ paddingLeft: depth * 22 + 14 }}
                           >
                             {depth > 0 ? (
@@ -1081,7 +1112,7 @@ export default function Home() {
                 </div>
               </section>
 
-              <section className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_1px_0_var(--shadow-line)]">
+              <section className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_1px_0_var(--shadow-line)]">
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex min-w-0 flex-wrap items-center gap-2 sm:flex-nowrap sm:gap-3">
                     <Archive size={18} strokeWidth={1.8} className="text-[var(--muted)]" aria-hidden="true" />
@@ -1159,46 +1190,18 @@ export default function Home() {
                 ) : null}
               </section>
 
-              <DailyFocusTimeline
-                copy={{
-                  today: copy.today,
-                  idle: copy.idle,
-                  unassigned: copy.unassigned,
-                  totalFocused: copy.totalFocused,
-                  sessionCount: copy.sessionCount,
-                  longestSession: copy.longestSession,
-                  timeline: copy.timeline,
-                  previousDay: copy.previousDay,
-                  nextDay: copy.nextDay,
-                  backToToday: copy.backToToday,
-                  noSessionsForDay: copy.noSessionsForDay,
-                  sessionDetail: copy.sessionDetail,
-                  timeRange: copy.timeRange,
-                  duration: copy.duration,
-                  pauseDuration: copy.pauseDuration,
-                  status: copy.status,
-                  showFullDay: copy.showFullDay,
-                  showActiveWindow: copy.showActiveWindow,
-                  timingAnomaly: copy.timingAnomaly,
-                  timingAnomalyCount: copy.timingAnomalyCount,
-                  shortSessions: copy.shortSessions,
-                  summary: copy.summary,
-                }}
-                language={language}
-                sessions={sessions}
-                pauses={pauses}
-                tasks={tasks}
-              />
-
-              <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6">
-                <h3 className="text-lg font-semibold">{copy.today}</h3>
+              <div className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_1px_0_var(--shadow-line)]">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">{copy.sectionReview}</p>
+                  <h3 className="mt-1 text-2xl font-semibold tracking-[-0.04em]">{copy.today}</h3>
+                </div>
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
                   {[
                     [copy.completed, String(todayStats.completedCount)],
                     [copy.focusTime, formatDuration(todayStats.totalFocusSeconds)],
                     [copy.interruptions, String(todayStats.openInterruptionCount)],
                   ].map(([label, value]) => (
-                    <div key={label} className="rounded-2xl bg-[var(--surface-soft)] p-4">
+                    <div key={label} className="rounded-[1.35rem] bg-[var(--surface-soft)] p-4">
                       <p className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--muted)]">{label}</p>
                       <p className="mt-2 text-lg font-semibold">{value}</p>
                     </div>
@@ -1217,7 +1220,7 @@ export default function Home() {
                       >
                         <div className="flex items-center justify-between gap-3">
                           <span className="font-medium">{session.taskPathSnapshot ?? session.intention ?? copy.unassigned}</span>
-                          <span className="text-xs text-[var(--muted)]">{session.status}</span>
+                          <span className="text-xs text-[var(--muted)]">{sessionStatusText(copy, session.status)}</span>
                         </div>
                         <p className="mt-1 text-xs text-[var(--muted)]">
                           {formatDuration(session.actualSeconds)}
@@ -1269,12 +1272,57 @@ export default function Home() {
                   )}
                 </div>
               </div>
+
+              <details className="group rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_1px_0_var(--shadow-line)]">
+                <summary className="flex list-none items-center justify-between gap-4 text-left [&::-webkit-details-marker]:hidden">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">{copy.timeline}</p>
+                    <h3 className="mt-1 text-xl font-semibold tracking-tight">{copy.timeline}</h3>
+                  </div>
+                  <ChevronDown size={18} className="text-[var(--muted)] transition group-open:rotate-180" aria-hidden="true" />
+                </summary>
+                <div className="mt-5">
+                  <DailyFocusTimeline
+                    copy={{
+                      today: copy.today,
+                      idle: copy.idle,
+                      unassigned: copy.unassigned,
+                      totalFocused: copy.totalFocused,
+                      sessionCount: copy.sessionCount,
+                      longestSession: copy.longestSession,
+                      timeline: copy.timeline,
+                      previousDay: copy.previousDay,
+                      nextDay: copy.nextDay,
+                      backToToday: copy.backToToday,
+                      noSessionsForDay: copy.noSessionsForDay,
+                      sessionDetail: copy.sessionDetail,
+                      timeRange: copy.timeRange,
+                      duration: copy.duration,
+                      pauseDuration: copy.pauseDuration,
+                      status: copy.status,
+                      showFullDay: copy.showFullDay,
+                      showActiveWindow: copy.showActiveWindow,
+                      timingAnomaly: copy.timingAnomaly,
+                      timingAnomalyCount: copy.timingAnomalyCount,
+                      shortSessions: copy.shortSessions,
+                      summary: copy.summary,
+                    }}
+                    language={language}
+                    sessions={sessions}
+                    pauses={pauses}
+                    tasks={tasks}
+                  />
+                </div>
+              </details>
             </div>
           </div>
 
-          <aside className="grid content-start gap-6">
-            <section className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6">
-              <h3 className="text-lg font-semibold">{copy.interruptions}</h3>
+          <aside className="grid content-start gap-6 lg:sticky lg:top-6">
+            <section className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_16px_50px_rgba(0,0,0,0.05)]">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">{copy.sectionCapture}</p>
+                <h3 className="mt-1 text-xl font-semibold tracking-tight">{copy.interruptions}</h3>
+              </div>
               <textarea
                 className="mt-4 min-h-40 w-full resize-none rounded-2xl border border-[var(--border)] bg-[var(--surface-soft)] p-4 text-sm outline-none placeholder:text-[var(--placeholder)]"
                 placeholder={copy.openInterruptionPlaceholder}
@@ -1328,8 +1376,11 @@ export default function Home() {
               </div>
             </section>
 
-            <section className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6">
-              <h3 className="text-lg font-semibold">{copy.settings}</h3>
+            <section className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_1px_0_var(--shadow-line)]">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">{copy.sectionPreferences}</p>
+                <h3 className="mt-1 text-xl font-semibold tracking-tight">{copy.settings}</h3>
+              </div>
               <div className="mt-4 space-y-4 text-sm">
                 <label className="block rounded-2xl bg-[var(--surface-soft)] px-4 py-3">
                   <span>{copy.defaultFocusDuration}</span>
@@ -1379,60 +1430,76 @@ export default function Home() {
                 <p className="px-1 text-xs text-[var(--muted)]">
                   {copy.notificationPermission}: {notificationStatus}. {copy.notificationPrimary}
                 </p>
-                <CloudSyncPanel language={language} />
-                <button
-                  className="w-full rounded-2xl bg-[var(--primary)] px-4 py-3 text-sm font-medium text-[var(--primary-foreground)]"
-                  onClick={async () => {
-                    const json = await exportJson();
-                    const blob = new Blob([json], { type: "application/json" });
-                    const url = URL.createObjectURL(blob);
-                    const link = document.createElement("a");
-                    link.href = url;
-                    link.download = `pomotree-export-${new Date().toISOString()}.json`;
-                    link.click();
-                    URL.revokeObjectURL(url);
-                  }}
-                >
-                  {copy.exportJson}
-                </button>
-                <button
-                  className="w-full rounded-2xl border border-[var(--border)] px-4 py-3 text-sm font-medium"
-                  onClick={() => setShowImport((value) => !value)}
-                >
-                  {copy.importJson}
-                </button>
-                {showImport ? (
-                  <form
-                    className="space-y-3 rounded-2xl border border-[var(--border)] bg-[var(--surface-soft)] p-3"
-                    onSubmit={async (event) => {
-                      event.preventDefault();
-                      await importJson(importText);
-                      setImportText("");
-                      setShowImport(false);
-                    }}
-                  >
-                    <textarea
-                      aria-label={copy.importJson}
-                      className="min-h-32 w-full resize-none rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-xs outline-none placeholder:text-[var(--placeholder)]"
-                      value={importText}
-                      onChange={(event) => setImportText(event.target.value)}
-                      placeholder={copy.importPlaceholder}
-                    />
-                    <div className="flex gap-2">
-                      <button className="rounded-xl bg-[var(--primary)] px-3 py-2 text-xs font-medium text-[var(--primary-foreground)]">{copy.restoreData}</button>
-                      <button
-                        type="button"
-                        className="rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-medium"
-                        onClick={() => {
+                <details className="rounded-2xl bg-[var(--surface-soft)] px-4 py-3">
+                  <summary className="flex list-none items-center justify-between gap-3 font-medium [&::-webkit-details-marker]:hidden">
+                    <span>{copy.cloudSync}</span>
+                    <ChevronDown size={16} className="text-[var(--muted)]" aria-hidden="true" />
+                  </summary>
+                  <div className="mt-3">
+                    <CloudSyncPanel language={language} />
+                  </div>
+                </details>
+                <details className="rounded-2xl bg-[var(--surface-soft)] px-4 py-3">
+                  <summary className="flex list-none items-center justify-between gap-3 font-medium [&::-webkit-details-marker]:hidden">
+                    <span>{copy.restoreData}</span>
+                    <ChevronDown size={16} className="text-[var(--muted)]" aria-hidden="true" />
+                  </summary>
+                  <div className="mt-3 space-y-3">
+                    <button
+                      className="w-full rounded-2xl bg-[var(--primary)] px-4 py-3 text-sm font-medium text-[var(--primary-foreground)]"
+                      onClick={async () => {
+                        const json = await exportJson();
+                        const blob = new Blob([json], { type: "application/json" });
+                        const url = URL.createObjectURL(blob);
+                        const link = document.createElement("a");
+                        link.href = url;
+                        link.download = `pomotree-export-${new Date().toISOString()}.json`;
+                        link.click();
+                        URL.revokeObjectURL(url);
+                      }}
+                    >
+                      {copy.exportJson}
+                    </button>
+                    <button
+                      className="w-full rounded-2xl border border-[var(--border)] px-4 py-3 text-sm font-medium"
+                      onClick={() => setShowImport((value) => !value)}
+                    >
+                      {copy.importJson}
+                    </button>
+                    {showImport ? (
+                      <form
+                        className="space-y-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3"
+                        onSubmit={async (event) => {
+                          event.preventDefault();
+                          await importJson(importText);
                           setImportText("");
                           setShowImport(false);
                         }}
                       >
-                        {copy.cancel}
-                      </button>
-                    </div>
-                  </form>
-                ) : null}
+                        <textarea
+                          aria-label={copy.importJson}
+                          className="min-h-32 w-full resize-none rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-xs outline-none placeholder:text-[var(--placeholder)]"
+                          value={importText}
+                          onChange={(event) => setImportText(event.target.value)}
+                          placeholder={copy.importPlaceholder}
+                        />
+                        <div className="flex gap-2">
+                          <button className="rounded-xl bg-[var(--primary)] px-3 py-2 text-xs font-medium text-[var(--primary-foreground)]">{copy.restoreData}</button>
+                          <button
+                            type="button"
+                            className="rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-medium"
+                            onClick={() => {
+                              setImportText("");
+                              setShowImport(false);
+                            }}
+                          >
+                            {copy.cancel}
+                          </button>
+                        </div>
+                      </form>
+                    ) : null}
+                  </div>
+                </details>
               </div>
             </section>
           </aside>
