@@ -2207,7 +2207,7 @@ dependencies = [
 
 [[package]]
 name = "pomotree"
-version = "1.0.7"
+version = "1.0.8"
 dependencies = [
  "tauri",
  "tauri-build",
