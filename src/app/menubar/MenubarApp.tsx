@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Check, CheckCircle2, ChevronDown, Circle, ExternalLink, Globe2, Monitor, Moon, MoreHorizontal, Pause, Play, Plus, Settings, Square, Sun, Tag, Timer } from "lucide-react";
+import { ArrowLeft, Check, CheckCircle2, ChevronDown, Circle, ExternalLink, Globe2, Monitor, Moon, Pause, Play, Plus, Settings, Square, Sun, Tag, Timer } from "lucide-react";
 import { getTaskPathIds } from "@/lib/services/taskSelectors";
 import { useAppStore } from "@/lib/store/useAppStore";
 import { computeRemainingSeconds, formatClock } from "@/lib/utils/timer";
@@ -47,8 +47,6 @@ type MenubarCopy = {
   noGoal: string;
   noTag: string;
   moreActions: string;
-  moreOptions: string;
-  fewerOptions: string;
   pausedStatus: string;
   pause: string;
   quickCapture: string;
@@ -102,13 +100,11 @@ const TEXT: Record<AppLanguage, MenubarCopy> = {
     noGoal: "No goal written",
     noTag: "No tag",
     moreActions: "More actions",
-    moreOptions: "More options",
-    fewerOptions: "Fewer options",
     pausedStatus: "Paused",
     pause: "Pause",
     quickCapture: "Quick capture",
     ready: "Ready to focus",
-    recentFocus: "Recent focus",
+    recentFocus: "Continue recent",
     recorded: "Recorded:",
     resume: "Resume",
     saveAndFinish: "Save and finish",
@@ -155,13 +151,11 @@ const TEXT: Record<AppLanguage, MenubarCopy> = {
     noGoal: "未填写目标",
     noTag: "无标签",
     moreActions: "更多操作",
-    moreOptions: "更多选项",
-    fewerOptions: "收起选项",
     pausedStatus: "已暂停",
     pause: "暂停",
     quickCapture: "快速记录",
     ready: "准备开始专注",
-    recentFocus: "最近专注",
+    recentFocus: "继续最近任务",
     recorded: "已记录：",
     resume: "继续",
     saveAndFinish: "保存并结束",
@@ -352,7 +346,7 @@ function IdleStartForm({
   const [selectedTaskId, setSelectedTaskId] = useState<string | null | undefined>(undefined);
   const [durationPreset, setDurationPreset] = useState<DurationPreset>(defaultFocusSeconds === 3000 ? 50 : 25);
   const [customMinutes, setCustomMinutes] = useState(String(Math.max(1, Math.round(defaultFocusSeconds / 60))));
-  const [showOptions, setShowOptions] = useState(false);
+  const [showDurationOptions, setShowDurationOptions] = useState(false);
   const [showTaskCreator, setShowTaskCreator] = useState(false);
   const [taskPathDraft, setTaskPathDraft] = useState("");
   const [tagDraft, setTagDraft] = useState("");
@@ -360,7 +354,9 @@ function IdleStartForm({
   const quickTasks = activeTasks.slice(0, 3);
   const effectiveTaskId = selectedTaskId === undefined ? defaultTaskId : selectedTaskId;
   const selectedTaskPath = effectiveTaskId ? taskPath(tasks, effectiveTaskId) : null;
-  const plannedSeconds = durationPreset === "custom" ? Math.max(1, Number(customMinutes) || 1) * 60 : durationPreset * 60;
+  const customDurationMinutes = Math.max(1, Number(customMinutes) || 1);
+  const plannedSeconds = durationPreset === "custom" ? customDurationMinutes * 60 : durationPreset * 60;
+  const durationLabel = durationPreset === "custom" ? `${customDurationMinutes} min` : `${durationPreset} min`;
   const normalizedTagDraft = tagDraft.trim().replace(/^#+/, "").trim();
 
   useEffect(() => {
@@ -503,40 +499,22 @@ function IdleStartForm({
         </div>
       ) : null}
 
-      <button
-        type="button"
-        onClick={() => setShowOptions((value) => !value)}
-        className="menubar-button flex h-11 items-center justify-center gap-2 rounded-[10px] border border-[var(--menubar-border-strong)] bg-[var(--menubar-control-bg)] px-3 text-[14px] font-bold text-[var(--menubar-text)]"
-        aria-expanded={showOptions}
-      >
-        <MoreHorizontal size={18} />
-        {showOptions ? copy.fewerOptions : copy.moreOptions}
-      </button>
+      <section className="grid gap-2">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-[13px] font-bold uppercase tracking-[0.16em] text-[var(--menubar-muted)]">{copy.duration}</p>
+          <button
+            type="button"
+            onClick={() => setShowDurationOptions((value) => !value)}
+            className="menubar-button inline-flex h-9 items-center gap-1.5 rounded-full border border-[var(--menubar-border-strong)] bg-[var(--menubar-control-bg)] px-3 text-[13px] font-bold text-[var(--menubar-text)]"
+            aria-expanded={showDurationOptions}
+          >
+            {durationLabel}
+            <ChevronDown className={showDurationOptions ? "rotate-180 transition-transform" : "transition-transform"} size={15} strokeWidth={2.4} />
+          </button>
+        </div>
 
-      {showOptions ? (
-        <div className="grid gap-[18px]">
-          {activeTasks.length ? (
-            <div className="grid gap-3">
-              <label className="text-[15px] font-medium text-[var(--menubar-muted-strong)]" htmlFor="menubar-task">{copy.task}</label>
-              <div className="relative">
-                <select
-                  id="menubar-task"
-                  value={effectiveTaskId ?? ""}
-                  onChange={(event) => updateSelectedTaskId(event.target.value)}
-                  className="h-[46px] w-full appearance-none rounded-[9px] border border-[var(--menubar-border-strong)] bg-transparent px-4 pr-10 text-[15px] font-medium outline-none"
-                >
-                  <option value="">{copy.startUnassigned}</option>
-                  {activeTasks.map((task) => (
-                    <option key={task.id} value={task.id}>{taskPath(tasks, task.id) ?? task.title}</option>
-                  ))}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[var(--menubar-muted)]" size={18} />
-              </div>
-            </div>
-          ) : null}
-
-          <div className="grid gap-3">
-            <p className="text-[15px] font-medium text-[var(--menubar-muted-strong)]">{copy.duration}</p>
+        {showDurationOptions ? (
+          <div className="grid gap-3 rounded-[14px] border border-[var(--menubar-border)] bg-[var(--menubar-soft)] p-3">
             <div className="grid grid-cols-3 gap-2.5">
               {([25, 50, "custom"] as const).map((preset) => {
                 const selected = durationPreset === preset;
@@ -545,7 +523,7 @@ function IdleStartForm({
                     key={preset}
                     type="button"
                     onClick={() => setDurationPreset(preset)}
-                    className={`h-[42px] rounded-[9px] border px-2 text-[15px] font-semibold ${selected ? "border-[#ebe8e3] bg-[#f3f0ec] text-[#111315] shadow-[0_8px_20px_rgba(0,0,0,0.22)]" : "border-[var(--menubar-border-strong)] bg-transparent text-[var(--menubar-muted-strong)]"}`}
+                    className={`h-[38px] rounded-full border px-2 text-[13px] font-bold ${selected ? "border-[var(--menubar-selected-bg)] bg-[var(--menubar-selected-bg)] text-[var(--menubar-selected-text)]" : "border-[var(--menubar-border-strong)] bg-[var(--menubar-control-bg)] text-[var(--menubar-muted-strong)]"}`}
                   >
                     {preset === "custom" ? copy.custom : `${preset} min`}
                   </button>
@@ -561,12 +539,12 @@ function IdleStartForm({
                 inputMode="numeric"
                 value={customMinutes}
                 onChange={(event) => setCustomMinutes(event.target.value)}
-                className="h-[42px] w-full rounded-[9px] border border-[var(--menubar-border-strong)] bg-transparent px-4 text-[15px] outline-none"
+                className="h-[40px] w-full rounded-[9px] border border-[var(--menubar-border-strong)] bg-[var(--menubar-surface)] px-4 text-[14px] font-semibold outline-none"
               />
             ) : null}
           </div>
-        </div>
-      ) : null}
+        ) : null}
+      </section>
     </form>
   );
 }
