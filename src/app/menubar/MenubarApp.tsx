@@ -344,9 +344,11 @@ function IdleStartForm({
   const [durationPreset, setDurationPreset] = useState<DurationPreset>(defaultFocusSeconds === 3000 ? 50 : 25);
   const [customMinutes, setCustomMinutes] = useState(String(Math.max(1, Math.round(defaultFocusSeconds / 60))));
   const [showDurationOptions, setShowDurationOptions] = useState(false);
+  const [showTaskPicker, setShowTaskPicker] = useState(false);
   const [showTaskCreator, setShowTaskCreator] = useState(false);
   const [taskPathDraft, setTaskPathDraft] = useState("");
   const [tagDraft, setTagDraft] = useState("");
+  const activeTasks = useMemo(() => tasks.filter((task) => task.status !== "archived" && task.status !== "done"), [tasks]);
   const effectiveTaskId = selectedTaskId === undefined ? defaultTaskId : selectedTaskId;
   const selectedTaskPath = effectiveTaskId ? taskPath(tasks, effectiveTaskId) : null;
   const customDurationMinutes = Math.max(1, Number(customMinutes) || 1);
@@ -358,8 +360,9 @@ function IdleStartForm({
     onCanStartChange(true);
   }, [onCanStartChange]);
 
-  const updateSelectedTaskId = (value: string) => {
+  const updateSelectedTaskId = (value: string | null) => {
     setSelectedTaskId(value || null);
+    setShowTaskPicker(false);
   };
 
   const createTask = async () => {
@@ -371,6 +374,7 @@ function IdleStartForm({
     setTaskPathDraft("");
     setTagDraft("");
     setShowTaskCreator(false);
+    setShowTaskPicker(false);
   };
 
   const submit = async (event?: FormEvent) => {
@@ -394,19 +398,44 @@ function IdleStartForm({
           </button>
         </div>
 
-        {selectedTaskPath ? (
-          <div className="rounded-[12px] border border-[var(--menubar-selected-bg)] bg-[var(--menubar-selected-bg)] px-4 py-3 text-[15px] font-bold text-[var(--menubar-selected-text)] shadow-[0_10px_24px_rgba(17,19,21,0.12)]">
-            <span className="line-clamp-2">{selectedTaskPath}</span>
-          </div>
-        ) : (
+        <div className="relative grid gap-2">
           <button
             type="button"
-            onClick={() => updateSelectedTaskId("")}
-            className="menubar-button rounded-[12px] border border-[var(--menubar-border)] bg-[var(--menubar-soft)] px-4 py-3 text-left text-[15px] font-semibold text-[var(--menubar-muted-strong)]"
+            onClick={() => setShowTaskPicker((value) => !value)}
+            className={`menubar-button flex min-h-[50px] w-full items-center justify-between gap-3 rounded-[12px] border px-4 py-3 text-left text-[15px] font-bold shadow-[0_10px_24px_rgba(17,19,21,0.10)] ${selectedTaskPath ? "border-[var(--menubar-selected-bg)] bg-[var(--menubar-selected-bg)] text-[var(--menubar-selected-text)]" : "border-[var(--menubar-border)] bg-[var(--menubar-soft)] text-[var(--menubar-muted-strong)]"}`}
+            aria-expanded={showTaskPicker}
           >
-            {copy.startUnassigned}
+            <span className="line-clamp-2 min-w-0">{selectedTaskPath ?? copy.startUnassigned}</span>
+            <ChevronDown className={`shrink-0 ${showTaskPicker ? "rotate-180 transition-transform" : "transition-transform"}`} size={17} strokeWidth={2.4} />
           </button>
-        )}
+
+          {showTaskPicker ? (
+            <div className="grid max-h-[210px] gap-1 overflow-y-auto rounded-[14px] border border-[var(--menubar-border)] bg-[var(--menubar-soft)] p-2 shadow-[0_16px_34px_rgba(17,19,21,0.18)]">
+              <button
+                type="button"
+                onClick={() => updateSelectedTaskId(null)}
+                className={`menubar-button flex min-h-10 items-center justify-between rounded-[10px] px-3 text-left text-[14px] font-semibold ${!effectiveTaskId ? "bg-[var(--menubar-selected-bg)] text-[var(--menubar-selected-text)]" : "text-[var(--menubar-muted-strong)] hover:bg-[var(--menubar-control-bg)]"}`}
+              >
+                <span>{copy.startUnassigned}</span>
+                {!effectiveTaskId ? <Check size={16} strokeWidth={2.4} /> : null}
+              </button>
+              {activeTasks.map((task) => {
+                const selected = effectiveTaskId === task.id;
+                return (
+                  <button
+                    key={task.id}
+                    type="button"
+                    onClick={() => updateSelectedTaskId(task.id)}
+                    className={`menubar-button flex min-h-10 items-center justify-between gap-3 rounded-[10px] px-3 text-left text-[14px] font-semibold ${selected ? "bg-[var(--menubar-selected-bg)] text-[var(--menubar-selected-text)]" : "text-[var(--menubar-muted-strong)] hover:bg-[var(--menubar-control-bg)]"}`}
+                  >
+                    <span className="min-w-0 truncate">{taskPath(tasks, task.id) ?? task.title}</span>
+                    {selected ? <Check size={16} strokeWidth={2.4} className="shrink-0" /> : null}
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+        </div>
 
         {showTaskCreator ? (
           <div className="rounded-[14px] border border-[var(--menubar-border)] bg-[var(--menubar-soft)] p-3">
