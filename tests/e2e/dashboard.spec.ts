@@ -132,13 +132,14 @@ test.beforeEach(async ({ page }, testInfo) => {
     window.localStorage.setItem("pomotree-db-name", dbName);
   }, `pomotree-e2e-${testInfo.workerIndex}-${testInfo.retry}-${testInfo.title.replace(/[^a-z0-9]/gi, "-")}`);
   await page.goto("/", { waitUntil: "networkidle" });
-  await page.getByText("Local-first MVP").waitFor();
+  await page.getByText("Saved locally").waitFor();
 });
 
 test("daily timeline uses proportional rail segments and selectable detail", async ({ page }) => {
   await seedTimelineData(page);
   await page.reload({ waitUntil: "networkidle" });
 
+  await page.getByText("Daily focus timeline").first().click();
   const timeline = page.getByRole("region", { name: "Daily focus timeline" });
   await expect(timeline.getByRole("button", { name: "Full day" })).toBeVisible();
   await expect(timeline.getByText("Deep work").first()).toBeVisible();
@@ -168,6 +169,7 @@ test("daily timeline date navigation handles empty days and mobile width", async
   await seedTimelineData(page);
   await page.reload({ waitUntil: "networkidle" });
 
+  await page.getByText("Daily focus timeline").first().click();
   const timeline = page.getByRole("region", { name: "Daily focus timeline" });
   await timeline.getByRole("button", { name: "Previous day" }).click();
   await expect(timeline.getByText("No completed focus sessions on this day.").first()).toBeVisible();

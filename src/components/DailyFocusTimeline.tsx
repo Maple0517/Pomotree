@@ -11,8 +11,11 @@ import {
 import type { FocusSession, Task, TimerPause } from "@/types/domain";
 
 type TimelineCopy = {
+  cancel: string;
+  correctAttribution: string;
   today: string;
   idle: string;
+  save: string;
   unassigned: string;
   totalFocused: string;
   sessionCount: string;
@@ -33,6 +36,12 @@ type TimelineCopy = {
   timingAnomalyCount: string;
   shortSessions: string;
   summary: string;
+};
+
+type TimelineTaskOption = {
+  id: string;
+  title: string;
+  depth: number;
 };
 
 type TimelineAnnotation =
@@ -209,7 +218,29 @@ function TimelineMetric({ label, value, tone = "default" }: { label: string; val
   );
 }
 
-function SelectedSessionDetail({ copy, selectedSession }: { copy: TimelineCopy; selectedSession: TimelineSessionSummary | null }) {
+function SelectedSessionDetail({
+  copy,
+  selectedSession,
+  taskOptions,
+  editingSessionId,
+  editingSessionTaskId,
+  onBeginEdit,
+  onCancelEdit,
+  onEditingSessionTaskIdChange,
+  onSaveAttribution,
+}: {
+  copy: TimelineCopy;
+  selectedSession: TimelineSessionSummary | null;
+  taskOptions: TimelineTaskOption[];
+  editingSessionId: string | null;
+  editingSessionTaskId: string;
+  onBeginEdit: (session: TimelineSessionSummary) => void;
+  onCancelEdit: () => void;
+  onEditingSessionTaskIdChange: (taskId: string) => void;
+  onSaveAttribution: () => void;
+}) {
+  const isEditingSelectedSession = selectedSession ? editingSessionId === selectedSession.sessionId : false;
+
   return (
     <aside className="rounded-[1.6rem] border border-[var(--border-subtle)] bg-[var(--surface-soft)] p-4">
       <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">{copy.sessionDetail}</p>
@@ -248,6 +279,45 @@ function SelectedSessionDetail({ copy, selectedSession }: { copy: TimelineCopy; 
               {copy.timingAnomaly}
             </p>
           ) : null}
+          {isEditingSelectedSession ? (
+            <form
+              className="mt-4 grid gap-2 rounded-2xl bg-[var(--surface-soft)] p-3 sm:grid-cols-[1fr_auto_auto]"
+              onSubmit={(event) => {
+                event.preventDefault();
+                onSaveAttribution();
+              }}
+            >
+              <select
+                aria-label={`${copy.correctAttribution}: ${selectedSession.title}`}
+                value={editingSessionTaskId}
+                onChange={(event) => onEditingSessionTaskIdChange(event.target.value)}
+                className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm outline-none"
+              >
+                <option value="">{copy.unassigned}</option>
+                {taskOptions.map((task) => (
+                  <option key={task.id} value={task.id}>
+                    {`${"— ".repeat(task.depth)}${task.title}`}
+                  </option>
+                ))}
+              </select>
+              <button className="rounded-xl bg-[var(--primary)] px-3 py-2 text-xs font-medium text-[var(--primary-foreground)]">{copy.save}</button>
+              <button
+                type="button"
+                className="rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-medium"
+                onClick={onCancelEdit}
+              >
+                {copy.cancel}
+              </button>
+            </form>
+          ) : (
+            <button
+              type="button"
+              className="mt-4 rounded-full border border-[var(--border)] px-3 py-1 text-xs font-medium text-[var(--muted)]"
+              onClick={() => onBeginEdit(selectedSession)}
+            >
+              {copy.correctAttribution}
+            </button>
+          )}
         </div>
       ) : (
         <p className="mt-4 rounded-[1.25rem] bg-[var(--surface)] p-4 text-sm text-[var(--muted)]">{copy.noSessionsForDay}</p>
@@ -262,16 +332,22 @@ export function DailyFocusTimeline({
   sessions,
   pauses,
   tasks,
+  taskOptions,
+  onChangeSessionAttribution,
 }: {
   copy: TimelineCopy;
   language: "en" | "zh";
   sessions: FocusSession[];
   pauses: TimerPause[];
   tasks: Task[];
+  taskOptions: TimelineTaskOption[];
+  onChangeSessionAttribution: (sessionId: string, taskId: string | null) => Promise<void>;
 }) {
   const [timelineDay, setTimelineDay] = useState(() => startOfLocalDay(new Date()));
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [showFullDay, setShowFullDay] = useState(false);
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [editingSessionTaskId, setEditingSessionTaskId] = useState("");
   const model = useMemo(
     () =>
       buildDailyTimelineModel({
@@ -292,6 +368,19 @@ export function DailyFocusTimeline({
   const viewStartMs = model.viewStart.getTime();
   const viewEndMs = model.viewEnd.getTime();
   const isToday = isSameLocalDay(timelineDay, new Date());
+  const beginEditSession = (session: TimelineSessionSummary) => {
+    setEditingSessionId(session.sessionId);
+    setEditingSessionTaskId(session.taskId ?? "");
+  };
+  const cancelEditSession = () => {
+    setEditingSessionId(null);
+    setEditingSessionTaskId("");
+  };
+  const saveSessionAttribution = async () => {
+    if (!editingSessionId) return;
+    await onChangeSessionAttribution(editingSessionId, editingSessionTaskId || null);
+    cancelEditSession();
+  };
 
   return (
     <section aria-label={copy.timeline} className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[0_1px_0_var(--shadow-line)] sm:p-5">
@@ -474,7 +563,17 @@ export function DailyFocusTimeline({
           </div>
         </div>
 
-        <SelectedSessionDetail copy={copy} selectedSession={selectedSession} />
+        <SelectedSessionDetail
+          copy={copy}
+          selectedSession={selectedSession}
+          taskOptions={taskOptions}
+          editingSessionId={editingSessionId}
+          editingSessionTaskId={editingSessionTaskId}
+          onBeginEdit={beginEditSession}
+          onCancelEdit={cancelEditSession}
+          onEditingSessionTaskIdChange={setEditingSessionTaskId}
+          onSaveAttribution={() => void saveSessionAttribution()}
+        />
       </div>
     </section>
   );

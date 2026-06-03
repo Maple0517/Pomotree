@@ -73,21 +73,21 @@ test.beforeEach(async ({ page }, testInfo) => {
     window.localStorage.setItem("pomotree-db-name", dbName);
   }, `pomotree-e2e-${testInfo.workerIndex}-${testInfo.retry}-${testInfo.title.replace(/[^a-z0-9]/gi, "-")}`);
   await page.goto("/", { waitUntil: "networkidle" });
-  await page.getByText("Local-first MVP").waitFor();
+  await page.getByText("Saved locally").waitFor();
 });
 
 test("start to finish and interruption tracking", async ({ page }) => {
   await addTaskPath(page, "Product / Draft product loop");
 
-  await page.getByLabel("Actual attribution").selectOption({ label: "— Draft product loop" });
+  await page.getByLabel("Focus task").selectOption({ label: "— Draft product loop" });
   await page.getByRole("button", { name: "Focus", exact: true }).click();
-  await expect(page.getByText("running", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Pause" })).toBeVisible();
 
   await page.getByRole("button", { name: "Finish", exact: true }).click();
-  await expect(page.getByText("finishing", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Save completed" })).toBeVisible();
   await page.getByPlaceholder("What did you actually complete? Summary is optional for MVP.").fill("Finished e2e validation");
   await page.getByRole("button", { name: "Save completed" }).click();
-  await expect(page.getByText("Idle")).toBeVisible();
+  await expect(page.getByText("Idle", { exact: true })).toBeVisible();
 
   await page.getByPlaceholder("Capture an intention, a summary, or the next follow-up task...").fill("Follow up on recovery");
   await page.getByRole("button", { name: "Add interruption" }).click();
@@ -97,9 +97,9 @@ test("start to finish and interruption tracking", async ({ page }) => {
 test("refresh restores a running session", async ({ page }) => {
   await addTaskPath(page, "Recovery task");
   await page.getByRole("button", { name: "Focus", exact: true }).click();
-  await expect(page.getByText("running")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Pause" })).toBeVisible();
   await page.reload({ waitUntil: "networkidle" });
-  await expect(page.getByText("running")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Pause" })).toBeVisible();
 });
 
 test("reopen expired running session enters finishing", async ({ page }) => {
@@ -107,44 +107,47 @@ test("reopen expired running session enters finishing", async ({ page }) => {
   await page.reload({ waitUntil: "networkidle" });
 
   await expect(page.getByText("ready to finish")).toBeVisible();
-  await expect(page.getByText("finishing", { exact: true })).toBeVisible();
-  await expect(page.getByText("Finish this focus session")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Save completed" })).toBeVisible();
 });
 
 test("finish flow supports attribution correction", async ({ page }) => {
   await addTaskPath(page, "Planned task");
   await addTaskPath(page, "Actual task");
 
-  await page.getByLabel("Actual attribution").selectOption({ label: "Planned task" });
+  await page.getByLabel("Focus task").selectOption({ label: "Planned task" });
   await page.getByRole("button", { name: "Focus", exact: true }).click();
   await page.getByRole("button", { name: "Finish", exact: true }).click();
-  await selectOptionByText(page, "Actual attribution", "Actual task");
+  await selectOptionByText(page, "Focus task", "Actual task");
   await page.getByPlaceholder("What did you actually complete? Summary is optional for MVP.").fill("Corrected the attribution");
   await page.getByRole("button", { name: "Save completed" }).click();
 
-  const recentSession = page.getByLabel("Recent sessions: Actual task");
-  await expect(recentSession).toBeVisible();
-  await expect(recentSession.getByText("Corrected the attribution")).toBeVisible();
+  await page.getByText("Daily focus timeline").first().click();
+  const timeline = page.getByRole("region", { name: "Daily focus timeline" });
+  await expect(timeline.locator("aside").getByText("Actual task")).toBeVisible();
+  await expect(timeline.locator("aside").getByText("Corrected the attribution")).toBeVisible();
+  await expect(page.getByLabel("Recent sessions: Actual task")).toHaveCount(0);
 });
 
-test("saved session attribution can be corrected from recent history", async ({ page }) => {
+test("saved session attribution can be corrected from timeline detail", async ({ page }) => {
   await addTaskPath(page, "Original history task");
   await addTaskPath(page, "Corrected history task");
 
-  await page.getByLabel("Actual attribution").selectOption({ label: "Original history task" });
+  await page.getByLabel("Focus task").selectOption({ label: "Original history task" });
   await page.getByRole("button", { name: "Focus", exact: true }).click();
   await page.getByRole("button", { name: "Finish" }).click();
   await page.getByPlaceholder("What did you actually complete? Summary is optional for MVP.").fill("Needs later correction");
   await page.getByRole("button", { name: "Save completed" }).click();
 
-  const originalSession = page.getByLabel("Recent sessions: Original history task");
-  await expect(originalSession).toBeVisible();
-  await originalSession.getByRole("button", { name: "Correct attribution" }).click();
+  await page.getByText("Daily focus timeline").first().click();
+  const timeline = page.getByRole("region", { name: "Daily focus timeline" });
+  await expect(timeline.locator("aside").getByText("Original history task")).toBeVisible();
+  await timeline.locator("aside").getByRole("button", { name: "Correct attribution" }).click();
   await selectOptionByText(page, "Correct attribution: Original history task", "Corrected history task");
   await page.getByLabel("Correct attribution: Original history task").locator("..").getByRole("button", { name: "Save" }).click();
 
-  await expect(page.getByLabel("Recent sessions: Corrected history task")).toBeVisible();
-  await expect(page.getByLabel("Recent sessions: Original history task")).toHaveCount(0);
+  await expect(timeline.locator("aside").getByRole("heading", { name: "Corrected history task" })).toBeVisible();
+  await expect(timeline.locator("aside").getByText("Original history task")).toHaveCount(0);
+  await expect(page.getByLabel("Recent sessions: Corrected history task")).toHaveCount(0);
 });
 
 test("interruption can be converted into a task", async ({ page }) => {
@@ -208,6 +211,7 @@ test("JSON import restores exported data", async ({ page }) => {
     });
   });
 
+  await page.getByText("Restore data").first().click();
   await page.getByRole("button", { name: "Import JSON" }).click();
   await page.getByLabel("Import JSON").fill(exportJson);
   await page.getByRole("button", { name: "Restore data" }).click();
@@ -218,6 +222,7 @@ test("JSON import restores exported data", async ({ page }) => {
 });
 
 test("cloud sync panel shows login entry when signed out", async ({ page }) => {
+  await page.getByText("Cloud sync").first().click();
   const panel = page.getByRole("region", { name: "Cloud Sync" });
   await expect(panel).toBeVisible();
 

@@ -70,13 +70,13 @@ test.beforeEach(async ({ page }, testInfo) => {
     window.localStorage.setItem("pomotree-db-name", dbName);
   }, `pomotree-e2e-${testInfo.workerIndex}-${testInfo.retry}-${testInfo.title.replace(/[^a-z0-9]/gi, "-")}`);
   await page.goto("/", { waitUntil: "networkidle" });
-  await page.getByText("Local-first MVP").waitFor();
+  await page.getByText("Saved locally").waitFor();
 });
 
 test("smoke flow: create a path, start focus, and save completion", async ({ page }) => {
   const taskTree = page.locator("section").filter({ hasText: "Task tree" }).first();
 
-  await expect(page.getByRole("heading", { name: "Focus tree, one session at a time" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "One focused session at a time" })).toBeVisible();
   await expect(taskTree.getByText("No tasks yet. Create your first focus tree node.")).toBeVisible();
 
   await addTaskPath(page, "Project Alpha / Draft");
@@ -86,17 +86,16 @@ test("smoke flow: create a path, start focus, and save completion", async ({ pag
 
   await page.getByRole("button", { name: "Focus: Project Alpha" }).click();
   await expect(page.getByRole("button", { name: "Pause" })).toBeVisible();
-  await expect(page.getByText("running", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Finish" }).click();
-  await expect(page.getByText("Finish this focus session")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Save completed" })).toBeVisible();
 
   await page.getByPlaceholder("What did you actually complete? Summary is optional for MVP.").fill("Completed the smoke test flow.");
   await page.getByLabel("Mark attributed task done").check();
   await page.getByRole("button", { name: "Save completed" }).click();
 
   await expect(page.getByRole("button", { name: "Focus", exact: true })).toBeVisible();
-  await expect(page.getByText("Finish this focus session")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Save completed" })).toHaveCount(0);
   await moreActions(page, "Project Alpha").click();
   await expect(page.getByRole("button", { name: "Reopen" })).toBeVisible();
 });
@@ -142,27 +141,29 @@ test("task tree collapses by depth and auto-expands the selected path", async ({
   await expect(taskRow(page, "Draft")).toHaveCount(0);
   await expect(taskRow(page, "Review")).toHaveCount(0);
 
-  await page.getByLabel("Actual attribution").selectOption({ label: "— — Review" });
+  await page.getByLabel("Focus task").selectOption({ label: "— — Review" });
   await expect(taskRow(page, "Draft")).toBeVisible();
   await expect(taskRow(page, "Review")).toBeVisible();
 });
 
 test("archive hides active branch and restore brings it back while keeping history", async ({ page }) => {
   const archivedPanel = page.locator("section").filter({ hasText: "Archived Tasks" }).first();
-  const todaySection = page.locator("div.rounded-3xl").filter({ hasText: "Today" }).first();
+  const todaySection = page.locator("div").filter({ hasText: /Review\s*Today/ }).first();
 
   await addTaskPath(page, "Project / Draft");
   await expect(taskRow(page, "Project")).toBeVisible();
   await expect(taskRow(page, "Draft")).toBeVisible();
 
-  await page.getByLabel("Actual attribution").selectOption({ label: "— Draft" });
+  await page.getByLabel("Focus task").selectOption({ label: "— Draft" });
   await page.getByRole("button", { name: "Focus", exact: true }).click();
   await page.getByRole("button", { name: "Finish" }).click();
   await page.getByPlaceholder("What did you actually complete? Summary is optional for MVP.").fill("Archived branch stats");
   await page.getByRole("button", { name: "Save completed" }).click();
 
-  await expect(page.getByLabel("Recent sessions: Project / Draft")).toBeVisible();
-  await expect(todaySection.locator("div.rounded-2xl").filter({ hasText: /Completed\s*1/ })).toBeVisible();
+  await page.getByText("Daily focus timeline").first().click();
+  const timeline = page.getByRole("region", { name: "Daily focus timeline" });
+  await expect(timeline.locator("aside").getByRole("heading", { name: "Project / Draft" })).toBeVisible();
+  await expect(todaySection.locator("div").filter({ hasText: /Completed\s*1/ }).first()).toBeVisible();
 
   await moreActions(page, "Project").click();
   await page.getByRole("button", { name: "Archive", exact: true }).click();
@@ -180,23 +181,23 @@ test("archive hides active branch and restore brings it back while keeping histo
 
   await expect(taskRow(page, "Project")).toBeVisible();
   await expect(taskRow(page, "Draft")).toBeVisible();
-  await expect(page.getByLabel("Recent sessions: Project / Draft")).toBeVisible();
 });
 
 test("legacy archived finishing session can still be saved without restoring the task", async ({ page }) => {
   await seedLegacyArchivedFinishingSession(page);
   await page.reload({ waitUntil: "networkidle" });
 
-  await expect(page.getByText("Finish this focus session")).toBeVisible();
-  await expect(page.getByLabel("Actual attribution")).toHaveValue("legacy-archived-task");
-  await expect(page.locator("#task-attribution option")).toContainText(["Current archived attribution: Legacy archived task"]);
+  await expect(page.getByRole("button", { name: "Save completed" })).toBeVisible();
+  await expect(page.getByLabel("Focus task")).toHaveValue("legacy-archived-task");
+  await expect(page.locator("#task-attribution option")).toContainText(["Archived task: Legacy archived task"]);
   await expect(page.getByLabel("Mark attributed task done")).toHaveCount(0);
 
   await page.getByPlaceholder("What did you actually complete? Summary is optional for MVP.").fill("Recovered legacy archived session");
   await page.getByRole("button", { name: "Save completed" }).click();
 
-  await expect(page.getByText("Finish this focus session")).toHaveCount(0);
-  await expect(page.getByLabel("Recent sessions: Legacy archived task")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Save completed" })).toHaveCount(0);
+  await page.getByText("Daily focus timeline").first().click();
+  await expect(page.getByRole("region", { name: "Daily focus timeline" }).locator("aside").getByRole("heading", { name: "Legacy archived task" })).toBeVisible();
   await expect(
     page.locator("section").filter({ hasText: "Archived Tasks" }).locator("p", { hasText: /^Legacy archived task$/ }).first(),
   ).toBeVisible();

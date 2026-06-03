@@ -13,5 +13,5 @@ test("shows a storage warning when IndexedDB is unavailable", async ({ page }, t
 
   await expect(page.getByText("Not ready")).toBeVisible();
   await expect(page.getByText("Local storage is unavailable")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Focus tree, one session at a time" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "One focused session at a time" })).toBeVisible();
 });

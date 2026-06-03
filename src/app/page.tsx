@@ -55,7 +55,6 @@ type DashboardCopy = {
   markAttributedDone: string;
   markDone: string;
   noArchivedTasks: string;
-  noCompletedSessions: string;
   noOpenInterruptions: string;
   noTasksYet: string;
   noTaskSelected: string;
@@ -64,7 +63,6 @@ type DashboardCopy = {
   notificationPrimary: string;
   openInterruptionPlaceholder: string;
   planned: string;
-  recentSessions: string;
   root: string;
   reopen: string;
   restore: string;
@@ -115,7 +113,6 @@ type DashboardCopy = {
   expandArchived: string;
   focusCompleteNotification: string;
   focusCompleteBody: string;
-  session: string;
   unassigned: string;
 };
 
@@ -209,7 +206,6 @@ const DASHBOARD_TEXT: Record<AppLanguage, DashboardCopy> = {
     markAttributedDone: "Mark attributed task done",
     markDone: "Mark done",
     noArchivedTasks: "No archived tasks.",
-    noCompletedSessions: "No completed focus sessions yet.",
     noOpenInterruptions: "No open interruptions.",
     noTasksYet: "No tasks yet. Create your first focus tree node.",
     noTaskSelected: "No task selected",
@@ -218,7 +214,6 @@ const DASHBOARD_TEXT: Record<AppLanguage, DashboardCopy> = {
     notificationPrimary: "The in-app completion panel stays on.",
     openInterruptionPlaceholder: "Capture an intention, a summary, or the next follow-up task...",
     planned: "Planned",
-    recentSessions: "Recent sessions",
     root: "Root",
     reopen: "Reopen",
     restore: "Restore",
@@ -266,7 +261,6 @@ const DASHBOARD_TEXT: Record<AppLanguage, DashboardCopy> = {
     expandArchived: "Expand archived tasks",
     focusCompleteNotification: "Pomotree focus complete",
     focusCompleteBody: "is ready to finish.",
-    session: "session",
     toggleTaskHint: "Click chevron to expand/collapse",
     summary: "Summary",
     summaryPlaceholder: "What did you actually complete? Summary is optional for MVP.",
@@ -316,7 +310,6 @@ const DASHBOARD_TEXT: Record<AppLanguage, DashboardCopy> = {
     markAttributedDone: "标记归属任务为完成",
     markDone: "标记完成",
     noArchivedTasks: "暂无归档任务。",
-    noCompletedSessions: "还没有已完成的专注记录。",
     noOpenInterruptions: "暂无未处理打断。",
     noTasksYet: "暂无任务。创建你的第一个专注树节点。",
     noTaskSelected: "未选择任务",
@@ -325,7 +318,6 @@ const DASHBOARD_TEXT: Record<AppLanguage, DashboardCopy> = {
     notificationPrimary: "页面内完成面板会继续保留。",
     openInterruptionPlaceholder: "记录一个意图、总结，或下一步要处理的任务...",
     planned: "计划",
-    recentSessions: "最近专注",
     root: "根目录",
     reopen: "重新打开",
     restore: "恢复",
@@ -373,7 +365,6 @@ const DASHBOARD_TEXT: Record<AppLanguage, DashboardCopy> = {
     expandArchived: "展开归档任务",
     focusCompleteNotification: "Pomotree 专注完成",
     focusCompleteBody: "已准备完成。",
-    session: "专注记录",
     toggleTaskHint: "点击箭头展开/收起",
     summary: "总结",
     summaryPlaceholder: "你实际完成了什么？MVP 阶段总结可选。",
@@ -432,8 +423,6 @@ export default function Home() {
   const [expandedTaskOverrides, setExpandedTaskOverrides] = useState<Record<string, boolean>>({});
   const [showArchivedTasks, setShowArchivedTasks] = useState(true);
   const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
-  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
-  const [editingSessionTaskId, setEditingSessionTaskId] = useState("");
   const [notificationStatus, setNotificationStatus] = useState<NotificationPermission | "unsupported">("unsupported");
   const lastNotifiedSessionIdRef = useRef<string | null>(null);
   const taskInputRef = useRef<HTMLInputElement | null>(null);
@@ -561,7 +550,6 @@ export default function Home() {
   const taskStatsById = useMemo(() => {
     return new Map(tasks.map((task) => [task.id, getTaskStats(tasks, sessions, task.id)]));
   }, [sessions, tasks]);
-  const recentSessions = sessions.filter((session) => ["completed", "partial"].includes(session.status)).slice(0, 5);
   const openInterruptions = interruptions.filter((interruption) => interruption.status === "open");
   const canStartFocus = Boolean((effectiveTaskId && selectedTask?.status !== "done" && selectedTask?.status !== "archived") || focusIntention.trim());
 
@@ -613,21 +601,9 @@ export default function Home() {
     setSubtaskTitle("");
   };
 
-  const beginEditSession = (session: (typeof sessions)[number]) => {
-    setEditingSessionId(session.id);
-    setEditingSessionTaskId(session.taskId ?? "");
-  };
-
   const saveInterruptionNote = async () => {
     await createInterruption(interruptionText);
     setInterruptionText("");
-  };
-
-  const saveSessionAttribution = async () => {
-    if (!editingSessionId) return;
-    await changeSessionAttribution(editingSessionId, editingSessionTaskId || null);
-    setEditingSessionId(null);
-    setEditingSessionTaskId("");
   };
 
   const toggleNotifications = async (enabled: boolean) => {
@@ -648,7 +624,7 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-[100dvh] bg-[var(--background)] text-[var(--foreground)]">
+    <main className="min-h-[100dvh] overflow-x-hidden bg-[var(--background)] text-[var(--foreground)]">
       <div className="mx-auto flex min-h-[100dvh] w-full max-w-7xl flex-col px-4 py-6 sm:px-6 lg:px-10">
         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] pb-5">
           <div className="min-w-0">
@@ -667,8 +643,8 @@ export default function Home() {
           </p>
         ) : null}
 
-        <section className="grid flex-1 items-start gap-6 py-6 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_380px]">
-          <div className="grid content-start gap-6">
+        <section className="grid min-w-0 flex-1 items-start gap-6 py-6 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_380px]">
+          <div className="grid min-w-0 content-start gap-6">
             <section className="relative overflow-hidden rounded-[2.25rem] border border-[var(--border)] bg-[var(--surface)] shadow-[0_22px_80px_rgba(0,0,0,0.08)]">
               <div className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-[var(--accent-soft)] blur-3xl" aria-hidden="true" />
               <div className="pointer-events-none absolute bottom-0 left-0 h-px w-full bg-linear-to-r from-transparent via-[var(--accent-border)] to-transparent" aria-hidden="true" />
@@ -1207,70 +1183,6 @@ export default function Home() {
                     </div>
                   ))}
                 </div>
-                <div className="mt-5 space-y-3">
-                  <p className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--muted)]">{copy.recentSessions}</p>
-                  {recentSessions.length === 0 ? (
-                    <EmptyState icon={<Timer size={20} strokeWidth={1.8} />} title={copy.noCompletedSessions} action={copy.currentFocus} />
-                  ) : (
-                    recentSessions.map((session) => (
-                      <article
-                        key={session.id}
-                        aria-label={`${copy.recentSessions}: ${session.taskPathSnapshot ?? session.intention ?? copy.unassigned}`}
-                        className="rounded-2xl bg-[var(--surface-soft)] px-4 py-3 text-sm"
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="font-medium">{session.taskPathSnapshot ?? session.intention ?? copy.unassigned}</span>
-                          <span className="text-xs text-[var(--muted)]">{sessionStatusText(copy, session.status)}</span>
-                        </div>
-                        <p className="mt-1 text-xs text-[var(--muted)]">
-                          {formatDuration(session.actualSeconds)}
-                          {session.summary ? ` - ${session.summary}` : ""}
-                        </p>
-                        {editingSessionId === session.id ? (
-                          <form
-                            className="mt-3 grid gap-2 rounded-2xl bg-[var(--surface)] p-3 sm:grid-cols-[1fr_auto_auto]"
-                            onSubmit={(event) => {
-                              event.preventDefault();
-                              void saveSessionAttribution();
-                            }}
-                          >
-                            <select
-                              aria-label={`${copy.correctAttribution}: ${session.taskPathSnapshot ?? session.intention ?? copy.session}`}
-                              value={editingSessionTaskId}
-                              onChange={(event) => setEditingSessionTaskId(event.target.value)}
-                              className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 outline-none"
-                            >
-                              <option value="">{copy.unassigned}</option>
-                              {activeTaskRows.map(({ task, depth }) => (
-                                <option key={task.id} value={task.id}>
-                                  {`${"— ".repeat(depth)}${task.title}`}
-                                </option>
-                              ))}
-                            </select>
-                            <button className="rounded-xl bg-[var(--primary)] px-3 py-2 text-xs font-medium text-[var(--primary-foreground)]">{copy.save}</button>
-                            <button
-                              type="button"
-                              className="rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-medium"
-                              onClick={() => {
-                                setEditingSessionId(null);
-                                setEditingSessionTaskId("");
-                              }}
-                            >
-                              {copy.cancel}
-                            </button>
-                          </form>
-                        ) : (
-                          <button
-                            className="mt-3 rounded-full border border-[var(--border)] px-3 py-1 text-xs font-medium text-[var(--muted)]"
-                            onClick={() => beginEditSession(session)}
-                          >
-                            {copy.correctAttribution}
-                          </button>
-                        )}
-                      </article>
-                    ))
-                  )}
-                </div>
               </div>
 
               <details className="group rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_1px_0_var(--shadow-line)]">
@@ -1284,8 +1196,11 @@ export default function Home() {
                 <div className="mt-5">
                   <DailyFocusTimeline
                     copy={{
+                      cancel: copy.cancel,
+                      correctAttribution: copy.correctAttribution,
                       today: copy.today,
                       idle: copy.idle,
+                      save: copy.save,
                       unassigned: copy.unassigned,
                       totalFocused: copy.totalFocused,
                       sessionCount: copy.sessionCount,
@@ -1311,13 +1226,15 @@ export default function Home() {
                     sessions={sessions}
                     pauses={pauses}
                     tasks={tasks}
+                    taskOptions={activeTaskRows.map(({ task, depth }) => ({ id: task.id, title: task.title, depth }))}
+                    onChangeSessionAttribution={changeSessionAttribution}
                   />
                 </div>
               </details>
             </div>
           </div>
 
-          <aside className="grid content-start gap-6 lg:sticky lg:top-6">
+          <aside className="grid min-w-0 content-start gap-6 lg:sticky lg:top-6">
             <section className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_16px_50px_rgba(0,0,0,0.05)]">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">{copy.sectionCapture}</p>
