@@ -10,6 +10,8 @@ test("menubar supports idle start, interruption, pause/resume, finish, and save"
   await page.goto("/menubar", { waitUntil: "networkidle" });
 
   await expect(page.getByText("Ready to focus")).toBeVisible();
+  await expect(page.getByText("Duration")).toBeHidden();
+  await expect(page.getByRole("button", { name: "More options" })).toBeVisible();
   await page.getByRole("textbox", { name: "Intent" }).fill("Menubar e2e focus");
   await page.getByRole("button", { name: "Start Focus" }).click();
 
@@ -24,15 +26,20 @@ test("menubar supports idle start, interruption, pause/resume, finish, and save"
   await page.getByRole("button", { name: "Pause" }).click();
   await expect(page.getByText(/Paused/)).toBeVisible();
   await expect(page.getByRole("button", { name: "Resume" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Discard" })).toBeHidden();
+  await expect(page.getByRole("button", { name: "More actions" })).toBeVisible();
 
   await page.getByRole("button", { name: "Resume" }).click();
   await expect(page.getByRole("button", { name: "Pause" })).toBeVisible();
 
   await page.getByRole("button", { name: "Finish" }).click();
   await expect(page.getByText("Focus complete")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Save and finish" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "What did you complete?" })).toBeHidden();
+  await page.getByRole("button", { name: "Add details" }).click();
   await expect(page.getByRole("textbox", { name: "What did you complete?" })).toBeVisible();
 
   await page.getByRole("textbox", { name: "What did you complete?" }).fill("Completed menubar e2e");
-  await page.getByRole("button", { name: "Save session completed" }).click();
+  await page.getByRole("button", { name: "Save and finish" }).click();
   await expect(page.getByText("Ready to focus")).toBeVisible();
 });

@@ -1,12 +1,11 @@
 "use client";
 
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Check, CheckCircle2, ChevronDown, Circle, ExternalLink, Globe2, Lightbulb, Monitor, Moon, Pause, Pencil, Play, Settings, Square, Sun, Timer } from "lucide-react";
+import { ArrowLeft, Check, CheckCircle2, ChevronDown, Circle, ExternalLink, Globe2, Lightbulb, Monitor, Moon, MoreHorizontal, Pause, Play, Settings, Square, Sun, Timer } from "lucide-react";
 import { getTaskPathIds } from "@/lib/services/taskSelectors";
 import { useAppStore } from "@/lib/store/useAppStore";
 import { computeRemainingSeconds, formatClock } from "@/lib/utils/timer";
 import type { FocusSession, Task, UserSettings } from "@/types/domain";
-import { CloudSyncPanel } from "@/components/CloudSyncPanel";
 
 type AppLanguage = NonNullable<UserSettings["language"]>;
 type DurationPreset = 25 | 50 | "custom";
@@ -25,6 +24,7 @@ type MenubarCopy = {
   back: string;
   capturePlaceholder: string;
   custom: string;
+  addDetails: string;
   dashboard: string;
   defaultFocus: string;
   discard: string;
@@ -44,6 +44,9 @@ type MenubarCopy = {
   themeHelp: string;
   noActiveSession: string;
   noGoal: string;
+  moreActions: string;
+  moreOptions: string;
+  fewerOptions: string;
   pausedStatus: string;
   pause: string;
   quickCapture: string;
@@ -51,6 +54,7 @@ type MenubarCopy = {
   recentFocus: string;
   recorded: string;
   resume: string;
+  saveAndFinish: string;
   saveCompleted: string;
   saveCapture: string;
   saved: string;
@@ -74,6 +78,7 @@ const TEXT: Record<AppLanguage, MenubarCopy> = {
     back: "Back",
     capturePlaceholder: "Something on your mind?",
     custom: "Custom",
+    addDetails: "Add details",
     dashboard: "Open Dashboard",
     defaultFocus: "Default focus",
     discard: "Discard",
@@ -93,6 +98,9 @@ const TEXT: Record<AppLanguage, MenubarCopy> = {
     themeHelp: "Choose light, dark, or follow your system setting.",
     noActiveSession: "No active session",
     noGoal: "No goal written",
+    moreActions: "More actions",
+    moreOptions: "More options",
+    fewerOptions: "Fewer options",
     pausedStatus: "Paused",
     pause: "Pause",
     quickCapture: "Quick capture",
@@ -100,6 +108,7 @@ const TEXT: Record<AppLanguage, MenubarCopy> = {
     recentFocus: "Recent focus",
     recorded: "Recorded:",
     resume: "Resume",
+    saveAndFinish: "Save and finish",
     saveCompleted: "Save session completed",
     saveCapture: "Save capture",
     saved: "Saved",
@@ -121,6 +130,7 @@ const TEXT: Record<AppLanguage, MenubarCopy> = {
     back: "返回",
     capturePlaceholder: "突然想到什么？",
     custom: "自定义",
+    addDetails: "补充详情",
     dashboard: "打开 Dashboard",
     defaultFocus: "默认专注时长",
     discard: "丢弃",
@@ -140,6 +150,9 @@ const TEXT: Record<AppLanguage, MenubarCopy> = {
     themeHelp: "选择日间、夜间，或跟随系统设置。",
     noActiveSession: "当前没有专注",
     noGoal: "未填写目标",
+    moreActions: "更多操作",
+    moreOptions: "更多选项",
+    fewerOptions: "收起选项",
     pausedStatus: "已暂停",
     pause: "暂停",
     quickCapture: "快速记录",
@@ -147,6 +160,7 @@ const TEXT: Record<AppLanguage, MenubarCopy> = {
     recentFocus: "最近专注",
     recorded: "已记录：",
     resume: "继续",
+    saveAndFinish: "保存并结束",
     saveCompleted: "保存本次完成",
     saveCapture: "保存记录",
     saved: "已保存",
@@ -332,6 +346,7 @@ function IdleStartForm({
   const [selectedTaskId, setSelectedTaskId] = useState<string | null | undefined>(undefined);
   const [durationPreset, setDurationPreset] = useState<DurationPreset>(defaultFocusSeconds === 3000 ? 50 : 25);
   const [customMinutes, setCustomMinutes] = useState(String(Math.max(1, Math.round(defaultFocusSeconds / 60))));
+  const [showOptions, setShowOptions] = useState(false);
   const activeTasks = useMemo(() => tasks.filter((task) => task.status !== "archived" && task.status !== "done"), [tasks]);
   const quickTasks = activeTasks.slice(0, 2);
   const effectiveTaskId = selectedTaskId === undefined ? defaultTaskId : selectedTaskId;
@@ -380,56 +395,70 @@ function IdleStartForm({
         />
       </div>
 
-      {activeTasks.length ? (
-        <div className="grid gap-3">
-          <label className="text-[15px] font-medium text-[var(--menubar-muted-strong)]" htmlFor="menubar-task">{copy.task}</label>
-          <div className="relative">
-            <select
-              id="menubar-task"
-              value={effectiveTaskId ?? ""}
-              onChange={(event) => updateSelectedTaskId(event.target.value)}
-              className="h-[46px] w-full appearance-none rounded-[9px] border border-[var(--menubar-border-strong)] bg-transparent px-4 pr-10 text-[15px] font-medium outline-none"
-            >
-              <option value="">{copy.startUnassigned}</option>
-              {activeTasks.map((task) => (
-                <option key={task.id} value={task.id}>{taskPath(tasks, task.id) ?? task.title}</option>
-              ))}
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[var(--menubar-muted)]" size={18} />
+      <button
+        type="button"
+        onClick={() => setShowOptions((value) => !value)}
+        className="menubar-button flex h-11 items-center justify-center gap-2 rounded-[10px] border border-[var(--menubar-border-strong)] bg-[var(--menubar-control-bg)] px-3 text-[14px] font-bold text-[var(--menubar-text)]"
+        aria-expanded={showOptions}
+      >
+        <MoreHorizontal size={18} />
+        {showOptions ? copy.fewerOptions : copy.moreOptions}
+      </button>
+
+      {showOptions ? (
+        <div className="grid gap-[22px]">
+          {activeTasks.length ? (
+            <div className="grid gap-3">
+              <label className="text-[15px] font-medium text-[var(--menubar-muted-strong)]" htmlFor="menubar-task">{copy.task}</label>
+              <div className="relative">
+                <select
+                  id="menubar-task"
+                  value={effectiveTaskId ?? ""}
+                  onChange={(event) => updateSelectedTaskId(event.target.value)}
+                  className="h-[46px] w-full appearance-none rounded-[9px] border border-[var(--menubar-border-strong)] bg-transparent px-4 pr-10 text-[15px] font-medium outline-none"
+                >
+                  <option value="">{copy.startUnassigned}</option>
+                  {activeTasks.map((task) => (
+                    <option key={task.id} value={task.id}>{taskPath(tasks, task.id) ?? task.title}</option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[var(--menubar-muted)]" size={18} />
+              </div>
+            </div>
+          ) : null}
+
+          <div className="grid gap-3">
+            <p className="text-[15px] font-medium text-[var(--menubar-muted-strong)]">{copy.duration}</p>
+            <div className="grid grid-cols-3 gap-2.5">
+              {([25, 50, "custom"] as const).map((preset) => {
+                const selected = durationPreset === preset;
+                return (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setDurationPreset(preset)}
+                    className={`h-[42px] rounded-[9px] border px-2 text-[15px] font-semibold ${selected ? "border-[#ebe8e3] bg-[#f3f0ec] text-[#111315] shadow-[0_8px_20px_rgba(0,0,0,0.22)]" : "border-[var(--menubar-border-strong)] bg-transparent text-[var(--menubar-muted-strong)]"}`}
+                  >
+                    {preset === "custom" ? copy.custom : `${preset} min`}
+                  </button>
+                );
+              })}
+            </div>
+            {durationPreset === "custom" ? (
+              <input
+                aria-label="Custom minutes"
+                type="number"
+                min={1}
+                max={240}
+                inputMode="numeric"
+                value={customMinutes}
+                onChange={(event) => setCustomMinutes(event.target.value)}
+                className="h-[42px] w-full rounded-[9px] border border-[var(--menubar-border-strong)] bg-transparent px-4 text-[15px] outline-none"
+              />
+            ) : null}
           </div>
         </div>
       ) : null}
-
-      <div className="grid gap-3">
-        <p className="text-[15px] font-medium text-[var(--menubar-muted-strong)]">{copy.duration}</p>
-        <div className="grid grid-cols-3 gap-2.5">
-          {([25, 50, "custom"] as const).map((preset) => {
-            const selected = durationPreset === preset;
-            return (
-              <button
-                key={preset}
-                type="button"
-                onClick={() => setDurationPreset(preset)}
-                className={`h-[42px] rounded-[9px] border px-2 text-[15px] font-semibold ${selected ? "border-[#ebe8e3] bg-[#f3f0ec] text-[#111315] shadow-[0_8px_20px_rgba(0,0,0,0.22)]" : "border-[var(--menubar-border-strong)] bg-transparent text-[var(--menubar-muted-strong)]"}`}
-              >
-                {preset === "custom" ? copy.custom : `${preset} min`}
-              </button>
-            );
-          })}
-        </div>
-        {durationPreset === "custom" ? (
-          <input
-            aria-label="Custom minutes"
-            type="number"
-            min={1}
-            max={240}
-            inputMode="numeric"
-            value={customMinutes}
-            onChange={(event) => setCustomMinutes(event.target.value)}
-            className="h-[42px] w-full rounded-[9px] border border-[var(--menubar-border-strong)] bg-transparent px-4 text-[15px] outline-none"
-          />
-        ) : null}
-      </div>
 
       {quickTasks.length ? (
         <div className="grid gap-2">
@@ -470,11 +499,8 @@ function ContextBlock({ copy, session, tasks }: { copy: MenubarCopy; session: Fo
   const title = session.intention?.trim() || path || copy.noGoal;
 
   return (
-    <section className="flex items-start justify-between gap-3">
+    <section>
       <h2 className="line-clamp-2 text-[22px] font-bold leading-[1.18] tracking-[-0.02em] text-[var(--menubar-text)]">{title}</h2>
-      <button type="button" className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full text-[var(--menubar-muted-strong)]" aria-label={copy.dashboard}>
-        <Pencil size={21} strokeWidth={1.8} />
-      </button>
     </section>
   );
 }
@@ -573,6 +599,7 @@ function FinishForm({
 }) {
   const [summary, setSummary] = useState("");
   const [selectedTaskId, setSelectedTaskId] = useState<string | null | undefined>(undefined);
+  const [showDetails, setShowDetails] = useState(false);
   const activeTasks = useMemo(() => tasks.filter((task) => task.status !== "archived" && task.status !== "done"), [tasks]);
   const currentTaskPath = session.taskPathSnapshot ?? taskPath(tasks, session.taskId);
   const effectiveTaskId = selectedTaskId === undefined ? session.taskId : selectedTaskId;
@@ -614,41 +641,53 @@ function FinishForm({
         </div>
       </section>
 
-      <div className="grid gap-3">
-        <label className="text-[15px] font-medium text-[var(--menubar-muted-strong)]" htmlFor="menubar-summary">{copy.whatComplete}</label>
-        <div className="relative">
-          <textarea
-            id="menubar-summary"
-            maxLength={120}
-            value={summary}
-            onChange={(event) => setSummary(event.target.value)}
-            onKeyDown={onTextareaKeyDown}
-            className="h-[78px] w-full resize-none rounded-[9px] border border-[var(--menubar-border-strong)] bg-transparent p-3 pr-14 text-[14px] font-medium outline-none placeholder:text-[var(--menubar-placeholder)]"
-            placeholder={copy.writeSummary}
-          />
-          <span className="absolute bottom-3 right-3 text-[13px] font-semibold text-[var(--menubar-muted)]">{summaryLength}/120</span>
-        </div>
-      </div>
-      <div className="grid gap-3">
-        <label className="text-[15px] font-medium text-[var(--menubar-muted-strong)]" htmlFor="menubar-attribution">{copy.attribution}</label>
-        <div className="relative">
-          <select
-            id="menubar-attribution"
-            value={effectiveTaskId ?? ""}
-            onChange={(event) => setSelectedTaskId(event.target.value || null)}
-            className="h-[44px] w-full appearance-none rounded-[9px] border border-[var(--menubar-border-strong)] bg-transparent px-3 pr-10 text-[15px] font-semibold outline-none"
-          >
-            {session.taskId && currentTaskPath && !activeTasks.some((task) => task.id === session.taskId) ? (
-              <option value={session.taskId} disabled>{currentTaskPath}</option>
-            ) : null}
-            <option value="">{copy.unassigned}</option>
-            {activeTasks.map((task) => (
-              <option key={task.id} value={task.id}>{taskPath(tasks, task.id) ?? task.title}</option>
-            ))}
-          </select>
-          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[var(--menubar-muted)]" size={18} />
-        </div>
-      </div>
+      {!showDetails ? (
+        <button
+          type="button"
+          onClick={() => setShowDetails(true)}
+          className="menubar-button h-11 rounded-[10px] border border-[var(--menubar-border-strong)] bg-[var(--menubar-control-bg)] px-3 text-[15px] font-bold text-[var(--menubar-text)]"
+        >
+          {copy.addDetails}
+        </button>
+      ) : (
+        <>
+          <div className="grid gap-3">
+            <label className="text-[15px] font-medium text-[var(--menubar-muted-strong)]" htmlFor="menubar-summary">{copy.whatComplete}</label>
+            <div className="relative">
+              <textarea
+                id="menubar-summary"
+                maxLength={120}
+                value={summary}
+                onChange={(event) => setSummary(event.target.value)}
+                onKeyDown={onTextareaKeyDown}
+                className="h-[78px] w-full resize-none rounded-[9px] border border-[var(--menubar-border-strong)] bg-transparent p-3 pr-14 text-[14px] font-medium outline-none placeholder:text-[var(--menubar-placeholder)]"
+                placeholder={copy.writeSummary}
+              />
+              <span className="absolute bottom-3 right-3 text-[13px] font-semibold text-[var(--menubar-muted)]">{summaryLength}/120</span>
+            </div>
+          </div>
+          <div className="grid gap-3">
+            <label className="text-[15px] font-medium text-[var(--menubar-muted-strong)]" htmlFor="menubar-attribution">{copy.attribution}</label>
+            <div className="relative">
+              <select
+                id="menubar-attribution"
+                value={effectiveTaskId ?? ""}
+                onChange={(event) => setSelectedTaskId(event.target.value || null)}
+                className="h-[44px] w-full appearance-none rounded-[9px] border border-[var(--menubar-border-strong)] bg-transparent px-3 pr-10 text-[15px] font-semibold outline-none"
+              >
+                {session.taskId && currentTaskPath && !activeTasks.some((task) => task.id === session.taskId) ? (
+                  <option value={session.taskId} disabled>{currentTaskPath}</option>
+                ) : null}
+                <option value="">{copy.unassigned}</option>
+                {activeTasks.map((task) => (
+                  <option key={task.id} value={task.id}>{taskPath(tasks, task.id) ?? task.title}</option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[var(--menubar-muted)]" size={18} />
+            </div>
+          </div>
+        </>
+      )}
     </form>
   );
 }
@@ -672,6 +711,8 @@ function ActionBar({
   onResume: () => void;
   onDiscard: () => void;
 }) {
+  const [showPausedActions, setShowPausedActions] = useState(false);
+
   if (mode === "running") {
     return (
       <div className="grid grid-cols-2 gap-3 px-5 pb-[18px] pt-3">
@@ -683,10 +724,30 @@ function ActionBar({
 
   if (mode === "paused") {
     return (
-      <div className="grid grid-cols-2 gap-3 px-5 pb-[18px] pt-3">
-        <PrimaryButton disabled={busy} onClick={onResume}><IconText icon={<Play size={18} fill="currentColor" />}>{copy.resume}</IconText></PrimaryButton>
-        <SecondaryButton disabled={busy} onClick={onDiscard}>{copy.discard}</SecondaryButton>
-        <div className="col-span-2"><PrimaryButton tone="hot" disabled={busy} onClick={onFinish}>{copy.finish}</PrimaryButton></div>
+      <div className="grid gap-2 px-5 pb-[18px] pt-3">
+        <div className="grid grid-cols-2 gap-3">
+          <PrimaryButton disabled={busy} onClick={onResume}><IconText icon={<Play size={18} fill="currentColor" />}>{copy.resume}</IconText></PrimaryButton>
+          <PrimaryButton tone="hot" disabled={busy} onClick={onFinish}>{copy.finish}</PrimaryButton>
+        </div>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => setShowPausedActions((value) => !value)}
+          className="menubar-button h-10 rounded-[10px] border border-[var(--menubar-border)] bg-transparent px-3 text-[13px] font-bold text-[var(--menubar-muted-strong)] disabled:opacity-75"
+          aria-expanded={showPausedActions}
+        >
+          {copy.moreActions}
+        </button>
+        {showPausedActions ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onDiscard}
+            className="menubar-button h-10 rounded-[10px] border border-[var(--menubar-border)] bg-transparent px-3 text-[13px] font-bold text-[var(--menubar-muted-strong)] disabled:opacity-75"
+          >
+            {copy.discard}
+          </button>
+        ) : null}
       </div>
     );
   }
@@ -702,7 +763,7 @@ function ActionBar({
           disabled={busy}
           className="menubar-button h-12 w-full rounded-[10px] menubar-primary-button px-4 text-[16px] font-semibold shadow-[0_10px_24px_rgba(17,19,21,0.16)] disabled:bg-[var(--menubar-soft)] disabled:text-[var(--menubar-muted)]"
         >
-          {copy.saveCompleted}
+          {copy.saveAndFinish}
         </button>
         <button
           type="button"
@@ -853,8 +914,6 @@ function SettingsPanel({ copy, language, settings, onBack, onChangeLanguage, onC
           })}
         </div>
       </section>
-
-      <CloudSyncPanel language={language} variant="menubar" />
     </div>
   );
 }
