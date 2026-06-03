@@ -26,6 +26,7 @@ import {
   createInterruption,
   createTask,
   createTaskPath,
+  createTaskPathWithLabel,
   discardSession,
   dismissInterruption,
   expireRunningSession,
@@ -63,6 +64,7 @@ interface AppState {
   updateSettings: (input: SettingsUpdate) => Promise<void>;
   createTask: (title: string, parentId?: string | null) => Promise<void>;
   createTaskPath: (path: string) => Promise<void>;
+  createTaskPathWithLabel: (path: string, labelName?: string | null) => Promise<Task>;
   updateTask: (taskId: string, input: TaskUpdateInput) => Promise<void>;
   moveTask: (taskId: string, parentId: string | null) => Promise<void>;
   archiveTask: (taskId: string) => Promise<void>;
@@ -246,10 +248,11 @@ function queueCloudBackup(set: (state: Partial<AppState>) => void) {
   }, 600);
 }
 
-async function mutateAndRefresh(set: (state: Partial<AppState>) => void, mutation: () => Promise<unknown>) {
-  await mutation();
+async function mutateAndRefresh<T>(set: (state: Partial<AppState>) => void, mutation: () => Promise<T>) {
+  const result = await mutation();
   await refreshAndBroadcast(set);
   queueCloudBackup(set);
+  return result;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -296,6 +299,14 @@ export const useAppStore = create<AppState>((set, get) => ({
       await mutateAndRefresh(set, () => createTaskPath(path));
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to create task path" });
+      throw error;
+    }
+  },
+  createTaskPathWithLabel: async (path, labelName = null) => {
+    try {
+      return await mutateAndRefresh(set, () => createTaskPathWithLabel(path, labelName));
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : "Failed to create task" });
       throw error;
     }
   },

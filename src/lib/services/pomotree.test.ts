@@ -10,6 +10,7 @@ import {
   createInterruption,
   createTask,
   createTaskPath,
+  createTaskPathWithLabel,
   discardSession,
   dismissInterruption,
   expireRunningSession,
@@ -413,6 +414,16 @@ describe("pomotree service invariants", () => {
     expect(exported.tasks).toHaveLength(1);
   });
 
+
+  it("creates a task path with a single label", async () => {
+    const leaf = await createTaskPathWithLabel("Work / Draft", " Deep Work ");
+
+    const labels = await db.taskLabels.orderBy("sortOrder").toArray();
+
+    expect(labels.map((label) => label.name)).toEqual(["Deep Work"]);
+    expect(leaf.title).toBe("Draft");
+    expect((await db.tasks.get(leaf.id))?.labelIds).toEqual([labels[0].id]);
+  });
 
   it("auto-creates task labels and deduplicates names case-insensitively", async () => {
     const task = await createTask("Label target");

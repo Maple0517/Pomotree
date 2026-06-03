@@ -507,6 +507,14 @@ export async function createTaskPath(path: string) {
   return current;
 }
 
+export async function createTaskPathWithLabel(path: string, labelName?: string | null) {
+  const task = await createTaskPath(path);
+  const normalizedLabelName = labelName ? normalizeTaskLabelName(labelName) : "";
+  if (!normalizedLabelName) return task;
+
+  return updateTask(task.id, { labelNames: [normalizedLabelName] });
+}
+
 export async function archiveTask(taskId: string) {
   return db.transaction("rw", db.tasks, db.focusSessions, async () => {
     const tasks = await db.tasks.orderBy("sortOrder").toArray();

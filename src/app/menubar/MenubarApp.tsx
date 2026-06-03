@@ -1,11 +1,11 @@
 "use client";
 
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Check, CheckCircle2, ChevronDown, Circle, ExternalLink, Globe2, Lightbulb, Monitor, Moon, MoreHorizontal, Pause, Play, Settings, Square, Sun, Timer } from "lucide-react";
+import { ArrowLeft, Check, CheckCircle2, ChevronDown, Circle, ExternalLink, Globe2, Monitor, Moon, MoreHorizontal, Pause, Play, Plus, Settings, Square, Sun, Tag, Timer } from "lucide-react";
 import { getTaskPathIds } from "@/lib/services/taskSelectors";
 import { useAppStore } from "@/lib/store/useAppStore";
 import { computeRemainingSeconds, formatClock } from "@/lib/utils/timer";
-import type { FocusSession, Task, UserSettings } from "@/types/domain";
+import type { FocusSession, Task, TaskLabel, UserSettings } from "@/types/domain";
 
 type AppLanguage = NonNullable<UserSettings["language"]>;
 type DurationPreset = 25 | 50 | "custom";
@@ -25,6 +25,8 @@ type MenubarCopy = {
   capturePlaceholder: string;
   custom: string;
   addDetails: string;
+  addTask: string;
+  addTaskPlaceholder: string;
   dashboard: string;
   defaultFocus: string;
   discard: string;
@@ -34,7 +36,6 @@ type MenubarCopy = {
   focusComplete: string;
   focused: string;
   greatWork: string;
-  intent: string;
   language: string;
   languageHelp: string;
   light: string;
@@ -44,6 +45,7 @@ type MenubarCopy = {
   themeHelp: string;
   noActiveSession: string;
   noGoal: string;
+  noTag: string;
   moreActions: string;
   moreOptions: string;
   fewerOptions: string;
@@ -62,11 +64,10 @@ type MenubarCopy = {
   startFocus: string;
   startUnassigned: string;
   task: string;
-  tip: string;
+  tag: string;
   tipAfterCapture: string;
   unassigned: string;
   whatComplete: string;
-  whatWorking: string;
   writeSummary: string;
   zh: string;
 };
@@ -79,6 +80,8 @@ const TEXT: Record<AppLanguage, MenubarCopy> = {
     capturePlaceholder: "Something on your mind?",
     custom: "Custom",
     addDetails: "Add details",
+    addTask: "Add task",
+    addTaskPlaceholder: "Task or path, e.g. Project / Subtask",
     dashboard: "Open Dashboard",
     defaultFocus: "Default focus",
     discard: "Discard",
@@ -88,7 +91,6 @@ const TEXT: Record<AppLanguage, MenubarCopy> = {
     focusComplete: "Focus complete",
     focused: "focused",
     greatWork: "Great work! You stayed focused.",
-    intent: "Intent",
     language: "Language",
     languageHelp: "Choose the language used across Pomotree.",
     light: "Light",
@@ -98,6 +100,7 @@ const TEXT: Record<AppLanguage, MenubarCopy> = {
     themeHelp: "Choose light, dark, or follow your system setting.",
     noActiveSession: "No active session",
     noGoal: "No goal written",
+    noTag: "No tag",
     moreActions: "More actions",
     moreOptions: "More options",
     fewerOptions: "Fewer options",
@@ -116,11 +119,10 @@ const TEXT: Record<AppLanguage, MenubarCopy> = {
     startFocus: "Start Focus",
     startUnassigned: "Start unassigned",
     task: "Task",
-    tip: "Set an intention to stay focused and make progress.",
+    tag: "Tag",
     tipAfterCapture: "Capture it, then continue your focus without breaking flow.",
-    unassigned: "Unassigned / intention",
+    unassigned: "Unassigned",
     whatComplete: "What did you complete?",
-    whatWorking: "What are you working on?",
     writeSummary: "Write a short summary...",
     zh: "中文",
   },
@@ -131,6 +133,8 @@ const TEXT: Record<AppLanguage, MenubarCopy> = {
     capturePlaceholder: "突然想到什么？",
     custom: "自定义",
     addDetails: "补充详情",
+    addTask: "添加任务",
+    addTaskPlaceholder: "任务或路径，例如：项目 / 子任务",
     dashboard: "打开 Dashboard",
     defaultFocus: "默认专注时长",
     discard: "丢弃",
@@ -140,7 +144,6 @@ const TEXT: Record<AppLanguage, MenubarCopy> = {
     focusComplete: "专注完成",
     focused: "已专注",
     greatWork: "做得好！你保持了专注。",
-    intent: "意图",
     language: "语言",
     languageHelp: "选择 Pomotree 的显示语言。",
     light: "日间",
@@ -150,6 +153,7 @@ const TEXT: Record<AppLanguage, MenubarCopy> = {
     themeHelp: "选择日间、夜间，或跟随系统设置。",
     noActiveSession: "当前没有专注",
     noGoal: "未填写目标",
+    noTag: "无标签",
     moreActions: "更多操作",
     moreOptions: "更多选项",
     fewerOptions: "收起选项",
@@ -168,11 +172,10 @@ const TEXT: Record<AppLanguage, MenubarCopy> = {
     startFocus: "开始专注",
     startUnassigned: "不绑定任务开始",
     task: "任务",
-    tip: "设定一个意图，帮你保持专注并推进进度。",
+    tag: "标签",
     tipAfterCapture: "先记录下来，然后继续专注，不打断思路。",
-    unassigned: "未分配 / 仅意图",
+    unassigned: "未分配",
     whatComplete: "你完成了什么？",
-    whatWorking: "你正在做什么？",
     writeSummary: "写一个简短总结...",
     zh: "中文",
   },
@@ -330,70 +333,175 @@ function SettingsButton({ copy, onClick }: { copy: MenubarCopy; onClick: () => v
 function IdleStartForm({
   copy,
   tasks,
+  labels,
   defaultFocusSeconds,
   defaultTaskId,
   onCanStartChange,
+  onCreateTask,
   onStart,
 }: {
   copy: MenubarCopy;
   tasks: Task[];
+  labels: TaskLabel[];
   defaultFocusSeconds: number;
   defaultTaskId: string | null;
   onCanStartChange: (canStart: boolean) => void;
-  onStart: (taskId: string | null, intention: string, plannedSeconds: number) => Promise<void>;
+  onCreateTask: (path: string, labelName: string | null) => Promise<Task>;
+  onStart: (taskId: string | null, plannedSeconds: number) => Promise<void>;
 }) {
-  const [intention, setIntention] = useState("");
   const [selectedTaskId, setSelectedTaskId] = useState<string | null | undefined>(undefined);
   const [durationPreset, setDurationPreset] = useState<DurationPreset>(defaultFocusSeconds === 3000 ? 50 : 25);
   const [customMinutes, setCustomMinutes] = useState(String(Math.max(1, Math.round(defaultFocusSeconds / 60))));
   const [showOptions, setShowOptions] = useState(false);
+  const [showTaskCreator, setShowTaskCreator] = useState(false);
+  const [taskPathDraft, setTaskPathDraft] = useState("");
+  const [tagDraft, setTagDraft] = useState("");
   const activeTasks = useMemo(() => tasks.filter((task) => task.status !== "archived" && task.status !== "done"), [tasks]);
-  const quickTasks = activeTasks.slice(0, 2);
+  const quickTasks = activeTasks.slice(0, 3);
   const effectiveTaskId = selectedTaskId === undefined ? defaultTaskId : selectedTaskId;
+  const selectedTaskPath = effectiveTaskId ? taskPath(tasks, effectiveTaskId) : null;
   const plannedSeconds = durationPreset === "custom" ? Math.max(1, Number(customMinutes) || 1) * 60 : durationPreset * 60;
-  const canStart = Boolean(intention.trim() || effectiveTaskId);
+  const normalizedTagDraft = tagDraft.trim().replace(/^#+/, "").trim();
 
   useEffect(() => {
-    onCanStartChange(canStart);
-  }, [canStart, onCanStartChange]);
-
-  const updateIntention = (value: string) => {
-    setIntention(value);
-    onCanStartChange(Boolean(value.trim() || effectiveTaskId));
-  };
+    onCanStartChange(true);
+  }, [onCanStartChange]);
 
   const updateSelectedTaskId = (value: string) => {
-    const nextTaskId = value || null;
-    setSelectedTaskId(nextTaskId);
-    onCanStartChange(Boolean(intention.trim() || nextTaskId));
+    setSelectedTaskId(value || null);
   };
 
   const selectQuickTask = (taskId: string) => {
     setSelectedTaskId(taskId);
-    onCanStartChange(true);
+  };
+
+  const createTask = async () => {
+    const path = taskPathDraft.trim();
+    if (!path) return;
+
+    const created = await onCreateTask(path, normalizedTagDraft || null);
+    setSelectedTaskId(created.id);
+    setTaskPathDraft("");
+    setTagDraft("");
+    setShowTaskCreator(false);
   };
 
   const submit = async (event?: FormEvent) => {
     event?.preventDefault();
-    if (!canStart) return;
-    await onStart(effectiveTaskId, intention.trim(), plannedSeconds);
-    setIntention("");
+    await onStart(effectiveTaskId ?? null, plannedSeconds);
   };
 
   return (
-    <form id={MENUBAR_FORMS.idle} className="grid gap-[26px]" onSubmit={(event) => void submit(event)}>
-      <div className="grid gap-3">
-        <label className="text-[15px] font-medium text-[var(--menubar-muted-strong)]" htmlFor="menubar-intention">
-          {copy.intent}
-        </label>
-        <input
-          id="menubar-intention"
-          value={intention}
-          onChange={(event) => updateIntention(event.target.value)}
-          className="h-[58px] w-full rounded-[9px] border border-[var(--menubar-border-strong)] bg-transparent px-4 text-[16px] font-medium outline-none placeholder:text-[var(--menubar-placeholder)]"
-          placeholder={copy.whatWorking}
-        />
-      </div>
+    <form id={MENUBAR_FORMS.idle} className="grid gap-[20px]" onSubmit={(event) => void submit(event)}>
+      <section className="grid gap-3">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-[13px] font-bold uppercase tracking-[0.16em] text-[var(--menubar-muted)]">{copy.task}</p>
+          <button
+            type="button"
+            onClick={() => setShowTaskCreator((value) => !value)}
+            className="menubar-button inline-flex h-9 items-center gap-1.5 rounded-full border border-[var(--menubar-border-strong)] bg-[var(--menubar-control-bg)] px-3 text-[13px] font-bold text-[var(--menubar-text)]"
+            aria-expanded={showTaskCreator}
+          >
+            <Plus size={15} strokeWidth={2.5} />
+            {copy.addTask}
+          </button>
+        </div>
+
+        {selectedTaskPath ? (
+          <div className="rounded-[12px] border border-[var(--menubar-selected-bg)] bg-[var(--menubar-selected-bg)] px-4 py-3 text-[15px] font-bold text-[var(--menubar-selected-text)] shadow-[0_10px_24px_rgba(17,19,21,0.12)]">
+            <span className="line-clamp-2">{selectedTaskPath}</span>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => updateSelectedTaskId("")}
+            className="menubar-button rounded-[12px] border border-[var(--menubar-border)] bg-[var(--menubar-soft)] px-4 py-3 text-left text-[15px] font-semibold text-[var(--menubar-muted-strong)]"
+          >
+            {copy.startUnassigned}
+          </button>
+        )}
+
+        {showTaskCreator ? (
+          <div className="rounded-[14px] border border-[var(--menubar-border)] bg-[var(--menubar-soft)] p-3">
+            <div className="grid gap-2">
+              <input
+                value={taskPathDraft}
+                onChange={(event) => setTaskPathDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void createTask();
+                  }
+                }}
+                className="h-[44px] w-full rounded-[9px] border border-[var(--menubar-border-strong)] bg-[var(--menubar-surface)] px-3 text-[14px] font-semibold outline-none placeholder:text-[var(--menubar-placeholder)]"
+                placeholder={copy.addTaskPlaceholder}
+              />
+              <div className="flex items-center gap-2">
+                <div className="relative min-w-0 flex-1">
+                  <Tag className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--menubar-muted)]" size={15} />
+                  <input
+                    value={tagDraft}
+                    onChange={(event) => setTagDraft(event.target.value)}
+                    className="h-9 w-full rounded-full border border-[var(--menubar-border-strong)] bg-[var(--menubar-surface)] pl-8 pr-3 text-[13px] font-bold outline-none placeholder:text-[var(--menubar-placeholder)]"
+                    placeholder={copy.noTag}
+                  />
+                </div>
+                <button
+                  type="button"
+                  disabled={!taskPathDraft.trim()}
+                  onClick={() => void createTask()}
+                  className="menubar-button h-9 rounded-full bg-[var(--menubar-selected-bg)] px-3 text-[13px] font-bold text-[var(--menubar-selected-text)] disabled:bg-transparent disabled:text-[var(--menubar-muted)]"
+                >
+                  {copy.addTask}
+                </button>
+              </div>
+              {labels.length ? (
+                <div className="flex flex-wrap gap-1.5 pt-1" aria-label={copy.tag}>
+                  {labels.slice(0, 5).map((label) => {
+                    const selected = normalizedTagDraft.toLocaleLowerCase() === label.normalizedName;
+                    return (
+                      <button
+                        key={label.id}
+                        type="button"
+                        onClick={() => setTagDraft(selected ? "" : label.name)}
+                        className={`menubar-button rounded-full border px-2.5 py-1 text-[12px] font-bold ${selected ? "border-[var(--menubar-selected-bg)] bg-[var(--menubar-selected-bg)] text-[var(--menubar-selected-text)]" : "border-[var(--menubar-border)] bg-[var(--menubar-control-bg)] text-[var(--menubar-muted-strong)]"}`}
+                      >
+                        #{label.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+      </section>
+
+      {quickTasks.length ? (
+        <div className="grid gap-2">
+          <p className="text-[13px] font-bold text-[var(--menubar-muted)]">{copy.recentFocus}</p>
+          <div className="grid gap-2">
+            {quickTasks.map((task) => {
+              const selected = effectiveTaskId === task.id;
+              return (
+                <button
+                  key={task.id}
+                  type="button"
+                  onClick={() => selectQuickTask(task.id)}
+                  className={`menubar-button flex h-10 min-w-0 items-center justify-between rounded-[9px] border px-3 text-left text-[14px] font-semibold ${
+                    selected
+                      ? "border-[var(--menubar-selected-bg)] bg-[var(--menubar-selected-bg)] text-[var(--menubar-selected-text)]"
+                      : "border-[var(--menubar-border)] bg-[var(--menubar-soft)] text-[var(--menubar-muted-strong)]"
+                  }`}
+                >
+                  <span className="truncate">{taskPath(tasks, task.id) ?? task.title}</span>
+                  {selected ? <Check size={16} strokeWidth={2.4} className="shrink-0" /> : null}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
 
       <button
         type="button"
@@ -406,7 +514,7 @@ function IdleStartForm({
       </button>
 
       {showOptions ? (
-        <div className="grid gap-[22px]">
+        <div className="grid gap-[18px]">
           {activeTasks.length ? (
             <div className="grid gap-3">
               <label className="text-[15px] font-medium text-[var(--menubar-muted-strong)]" htmlFor="menubar-task">{copy.task}</label>
@@ -459,37 +567,6 @@ function IdleStartForm({
           </div>
         </div>
       ) : null}
-
-      {quickTasks.length ? (
-        <div className="grid gap-2">
-          <p className="text-[13px] font-bold text-[var(--menubar-muted)]">{copy.recentFocus}</p>
-          <div className="grid gap-2">
-            {quickTasks.map((task) => {
-              const selected = effectiveTaskId === task.id;
-              return (
-                <button
-                  key={task.id}
-                  type="button"
-                  onClick={() => selectQuickTask(task.id)}
-                  className={`menubar-button flex h-10 min-w-0 items-center justify-between rounded-[9px] border px-3 text-left text-[14px] font-semibold ${
-                    selected
-                      ? "border-[var(--menubar-selected-bg)] bg-[var(--menubar-selected-bg)] text-[var(--menubar-selected-text)]"
-                      : "border-[var(--menubar-border)] bg-[var(--menubar-soft)] text-[var(--menubar-muted-strong)]"
-                  }`}
-                >
-                  <span className="truncate">{taskPath(tasks, task.id) ?? task.title}</span>
-                  {selected ? <Check size={16} strokeWidth={2.4} className="shrink-0" /> : null}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      ) : (
-        <div className="flex items-center gap-3 rounded-[9px] border border-[var(--menubar-border)] bg-[var(--menubar-soft)] px-4 py-3 text-[14px] leading-5 text-[var(--menubar-muted-strong)]">
-          <Lightbulb size={22} strokeWidth={1.7} className="shrink-0 text-[var(--menubar-muted)]" />
-          <p>{copy.tip}</p>
-        </div>
-      )}
     </form>
   );
 }
@@ -922,6 +999,7 @@ export function MenubarApp() {
   const {
     settings,
     tasks,
+    labels,
     sessions,
     pauses,
     hydrate,
@@ -933,6 +1011,7 @@ export function MenubarApp() {
     discardSession,
     saveFinish,
     createInterruption,
+    createTaskPathWithLabel,
     expireRunningSession,
     ready,
     loading,
@@ -1008,13 +1087,15 @@ export function MenubarApp() {
     }
   }, [activeSession?.id, activeSession?.status, expireRunningSession, remainingSeconds]);
 
-  const runAction = async (callback: () => Promise<void>, fallback: string) => {
+  const runAction = async <T,>(callback: () => Promise<T>, fallback: string) => {
     setAction({ busy: true, message: null });
     try {
-      await callback();
+      const result = await callback();
       setAction({ busy: false, message: null });
+      return result;
     } catch (caught) {
       setAction({ busy: false, message: caught instanceof Error ? caught.message : fallback });
+      throw caught;
     }
   };
 
@@ -1079,11 +1160,13 @@ export function MenubarApp() {
                     <IdleStartForm
                       copy={copy}
                       tasks={tasks}
+                      labels={labels}
                       defaultFocusSeconds={settings.defaultFocusSeconds}
                       defaultTaskId={defaultTaskId}
                       onCanStartChange={setCanStartIdleFocus}
-                      onStart={(taskId, intention, plannedSeconds) => runAction(async () => {
-                        await startFocus(taskId, intention, plannedSeconds);
+                      onCreateTask={(path, labelName) => runAction(() => createTaskPathWithLabel(path, labelName), "Failed to create task")}
+                      onStart={(taskId, plannedSeconds) => runAction(async () => {
+                        await startFocus(taskId, null, plannedSeconds);
                         setCanStartIdleFocus(false);
                       }, "Failed to start focus")}
                     />
