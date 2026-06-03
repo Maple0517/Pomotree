@@ -51,7 +51,6 @@ type MenubarCopy = {
   pause: string;
   quickCapture: string;
   ready: string;
-  recentFocus: string;
   recorded: string;
   resume: string;
   saveAndFinish: string;
@@ -104,7 +103,6 @@ const TEXT: Record<AppLanguage, MenubarCopy> = {
     pause: "Pause",
     quickCapture: "Quick capture",
     ready: "Ready to focus",
-    recentFocus: "Continue recent",
     recorded: "Recorded:",
     resume: "Resume",
     saveAndFinish: "Save and finish",
@@ -155,7 +153,6 @@ const TEXT: Record<AppLanguage, MenubarCopy> = {
     pause: "暂停",
     quickCapture: "快速记录",
     ready: "准备开始专注",
-    recentFocus: "继续最近任务",
     recorded: "已记录：",
     resume: "继续",
     saveAndFinish: "保存并结束",
@@ -306,7 +303,7 @@ function OpenDashboardButton({ copy }: { copy: MenubarCopy }) {
 function lastActiveSessionTaskId(sessions: FocusSession[], activeTasks: Task[]) {
   const activeTaskIds = new Set(activeTasks.map((task) => task.id));
   return sessions
-    .filter((session) => ["completed", "partial", "discarded"].includes(session.status) && session.taskId && activeTaskIds.has(session.taskId))
+    .filter((session) => session.status === "completed" && session.taskId && activeTaskIds.has(session.taskId))
     .sort((left, right) => (right.endedAt ?? right.updatedAt).localeCompare(left.endedAt ?? left.updatedAt))[0]?.taskId ?? null;
 }
 
@@ -350,8 +347,6 @@ function IdleStartForm({
   const [showTaskCreator, setShowTaskCreator] = useState(false);
   const [taskPathDraft, setTaskPathDraft] = useState("");
   const [tagDraft, setTagDraft] = useState("");
-  const activeTasks = useMemo(() => tasks.filter((task) => task.status !== "archived" && task.status !== "done"), [tasks]);
-  const quickTasks = activeTasks.slice(0, 3);
   const effectiveTaskId = selectedTaskId === undefined ? defaultTaskId : selectedTaskId;
   const selectedTaskPath = effectiveTaskId ? taskPath(tasks, effectiveTaskId) : null;
   const customDurationMinutes = Math.max(1, Number(customMinutes) || 1);
@@ -365,10 +360,6 @@ function IdleStartForm({
 
   const updateSelectedTaskId = (value: string) => {
     setSelectedTaskId(value || null);
-  };
-
-  const selectQuickTask = (taskId: string) => {
-    setSelectedTaskId(taskId);
   };
 
   const createTask = async () => {
@@ -472,32 +463,6 @@ function IdleStartForm({
           </div>
         ) : null}
       </section>
-
-      {quickTasks.length ? (
-        <div className="grid gap-2">
-          <p className="text-[13px] font-bold text-[var(--menubar-muted)]">{copy.recentFocus}</p>
-          <div className="grid gap-2">
-            {quickTasks.map((task) => {
-              const selected = effectiveTaskId === task.id;
-              return (
-                <button
-                  key={task.id}
-                  type="button"
-                  onClick={() => selectQuickTask(task.id)}
-                  className={`menubar-button flex h-10 min-w-0 items-center justify-between rounded-[9px] border px-3 text-left text-[14px] font-semibold ${
-                    selected
-                      ? "border-[var(--menubar-selected-bg)] bg-[var(--menubar-selected-bg)] text-[var(--menubar-selected-text)]"
-                      : "border-[var(--menubar-border)] bg-[var(--menubar-soft)] text-[var(--menubar-muted-strong)]"
-                  }`}
-                >
-                  <span className="truncate">{taskPath(tasks, task.id) ?? task.title}</span>
-                  {selected ? <Check size={16} strokeWidth={2.4} className="shrink-0" /> : null}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      ) : null}
 
       <section className="grid gap-2">
         <div className="flex items-center justify-between gap-3">
