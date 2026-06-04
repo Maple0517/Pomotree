@@ -1,3 +1,4 @@
+use std::sync::atomic::{AtomicU64, Ordering};
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
@@ -14,6 +15,9 @@ const QUIT_MENU_ID: &str = "quit";
 const WINDOW_MARGIN: i32 = 12;
 const TRAY_VERTICAL_GAP: i32 = 6;
 const FOCUS_COMPLETE_SOUND_PATH: &str = "/System/Library/Sounds/Funk.aiff";
+const FOCUS_COMPLETE_SOUND_RATE: &str = "0.5";
+
+static MANUAL_WINDOW_OPEN_GENERATION: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Clone, Copy)]
 struct TrayAnchor {
@@ -30,17 +34,16 @@ fn show_main_window(app: &AppHandle) {
     }
 }
 
-fn show_main_window_if_hidden(app: &AppHandle) {
-    if let Some(window) = app.get_webview_window(MAIN_WINDOW_LABEL) {
-        if window.is_visible().unwrap_or(false) {
-            return;
-        }
+fn note_manual_window_open() {
+    MANUAL_WINDOW_OPEN_GENERATION.fetch_add(1, Ordering::Relaxed);
+}
 
-        position_main_window(app, None);
-        let _ = window.unminimize();
-        let _ = window.show();
-        let _ = window.set_focus();
-    }
+fn manual_window_open_generation() -> u64 {
+    MANUAL_WINDOW_OPEN_GENERATION.load(Ordering::Relaxed)
+}
+
+fn should_auto_show_alert_window(alert_generation: u64, current_generation: u64) -> bool {
+    alert_generation == current_generation
 }
 
 fn toggle_main_window(app: &AppHandle, tray_anchor: Option<TrayAnchor>) {
@@ -49,6 +52,7 @@ fn toggle_main_window(app: &AppHandle, tray_anchor: Option<TrayAnchor>) {
         let is_focused = window.is_focused().unwrap_or(false);
 
         if !is_visible {
+            note_manual_window_open();
             position_main_window(app, tray_anchor);
             let _ = window.unminimize();
             let _ = window.show();
@@ -56,6 +60,7 @@ fn toggle_main_window(app: &AppHandle, tray_anchor: Option<TrayAnchor>) {
         } else if is_focused {
             let _ = window.hide();
         } else {
+            note_manual_window_open();
             position_main_window(app, tray_anchor);
             let _ = window.unminimize();
             let _ = window.set_focus();
@@ -219,6 +224,10 @@ fn play_focus_complete_sound() -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
         std::process::Command::new("afplay")
+            .arg("-r")
+            .arg(FOCUS_COMPLETE_SOUND_RATE)
+            .arg("-q")
+            .arg("1")
             .arg(FOCUS_COMPLETE_SOUND_PATH)
             .spawn()
             .map(|_| ())
@@ -233,20 +242,30 @@ fn play_focus_complete_sound() -> Result<(), String> {
 
 #[tauri::command]
 fn present_focus_complete_alert(app: AppHandle) -> Result<(), String> {
+    let alert_generation = manual_window_open_generation();
+
     #[cfg(target_os = "macos")]
     {
         std::thread::spawn(move || {
             let _ = std::process::Command::new("afplay")
+                .arg("-r")
+                .arg(FOCUS_COMPLETE_SOUND_RATE)
+                .arg("-q")
+                .arg("1")
                 .arg(FOCUS_COMPLETE_SOUND_PATH)
                 .status();
 
-            show_main_window_if_hidden(&app);
+            if should_auto_show_alert_window(alert_generation, manual_window_open_generation()) {
+                show_main_window(&app);
+            }
         });
     }
 
     #[cfg(not(target_os = "macos"))]
     {
-        show_main_window_if_hidden(&app);
+        if should_auto_show_alert_window(alert_generation, manual_window_open_generation()) {
+            show_main_window(&app);
+        }
     }
 
     Ok(())
@@ -321,7 +340,10 @@ pub fn run() {
             Ok(())
         })
         .on_menu_event(|app, event| match event.id().as_ref() {
-            SHOW_MENU_ID => show_main_window(app),
+            SHOW_MENU_ID => {
+                note_manual_window_open();
+                show_main_window(app);
+            }
             OPEN_DASHBOARD_MENU_ID => open_dashboard_window(app),
             QUIT_MENU_ID => app.exit(0),
             _ => {}
@@ -340,7 +362,30 @@ pub fn run() {
     app.run(|app, event| {
         #[cfg(target_os = "macos")]
         if let tauri::RunEvent::Reopen { .. } = event {
+            note_manual_window_open();
             show_main_window(app);
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_auto_show_alert_window;
+
+    #[test]
+    fn auto_shows_when_no_manual_open_happened_during_alert() {
+        expect_should_auto_show(7, 7, true);
+    }
+
+    #[test]
+    fn skips_auto_show_when_manual_open_happened_during_alert() {
+        expect_should_auto_show(7, 8, false);
+    }
+
+    fn expect_should_auto_show(alert_generation: u64, current_generation: u64, expected: bool) {
+        assert_eq!(
+            should_auto_show_alert_window(alert_generation, current_generation),
+            expected
+        );
+    }
 }
