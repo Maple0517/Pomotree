@@ -142,6 +142,10 @@ describe("pomotree service invariants", () => {
     await archiveTask(archived.id);
     await expect(startFocus(archived.id)).rejects.toThrow("archived");
 
+    const done = await createTask("Done target");
+    await updateTask(done.id, { status: "done" });
+    await expect(startFocus(done.id)).rejects.toThrow("done");
+
     const regular = await createTask("Regular target");
     const started = await startFocus(regular.id);
     await requestFinish();

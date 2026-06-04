@@ -37,6 +37,16 @@ describe("task selectors", () => {
     expect(getActiveTaskRows(tasks).map(({ task }) => task.id)).toEqual(["project", "draft"]);
   });
 
+  it("hides done branches from active task rows", () => {
+    const withDoneBranch: Task[] = [
+      ...tasks,
+      { id: "done-root", parentId: null, title: "Done root", status: "done", sortOrder: 2, createdAt: now, updatedAt: now, completedAt: now },
+      { id: "done-child", parentId: "done-root", title: "Done child", status: "todo", sortOrder: 0, createdAt: now, updatedAt: now },
+    ];
+
+    expect(getActiveTaskRows(withDoneBranch).map(({ task }) => task.id)).toEqual(["project", "draft"]);
+  });
+
   it("can include archived tasks when requested", () => {
     expect(getTaskRows(tasks, { includeArchived: true }).map(({ task }) => task.id)).toEqual([
       "project",

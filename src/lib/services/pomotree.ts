@@ -272,6 +272,7 @@ function assertParentIsValid(parent: Task | undefined) {
 function assertTaskCanReceiveFocus(task: Task | null | undefined) {
   if (!task) throw new Error("Task not found");
   if (task.status === "archived") throw new Error("Cannot focus or attribute time to an archived task");
+  if (task.status === "done") throw new Error("Cannot focus a done task");
 }
 
 function assertTaskCanBeAssignedForFinish(task: Task | null | undefined) {

@@ -94,7 +94,7 @@ export function getTaskRows(
 }
 
 export function getActiveTaskRows(tasks: Task[]) {
-  return getTaskRows(tasks, { includeArchived: false });
+  return getTaskRows(tasks.filter((task) => task.status !== "done"), { includeArchived: false });
 }
 
 export function getAutoExpandedTaskIds(tasks: Task[], taskIds: Array<string | null | undefined>) {
