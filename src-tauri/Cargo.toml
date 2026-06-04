@@ -1,6 +1,6 @@
 [package]
 name = "pomotree"
-version = "1.0.12"
+version = "1.0.13"
 description = "Pomotree macOS menubar spike"
 authors = ["Pomotree"]
 edition = "2021"
