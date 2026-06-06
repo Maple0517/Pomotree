@@ -467,6 +467,7 @@ export default function Home() {
   const [notificationStatus, setNotificationStatus] = useState<NotificationPermission | "unsupported">("unsupported");
   const lastNotifiedSessionIdRef = useRef<string | null>(null);
   const taskInputRef = useRef<HTMLInputElement | null>(null);
+  const focusTaskPickerRef = useRef<HTMLDivElement | null>(null);
   const [importText, setImportText] = useState("");
   const [showImport, setShowImport] = useState(false);
   const [now, setNow] = useState(() => Date.now());
@@ -512,6 +513,10 @@ export default function Home() {
     const closeOpenMenus = (event: PointerEvent) => {
       const target = event.target;
       if (!(target instanceof Node)) return;
+
+      if (focusTaskPickerRef.current && !focusTaskPickerRef.current.contains(target)) {
+        setShowFocusTaskPicker(false);
+      }
 
       document.querySelectorAll<HTMLDetailsElement>("details[open]").forEach((details) => {
         if (!details.contains(target)) {
@@ -761,7 +766,7 @@ export default function Home() {
                   <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
                     {copy.actualAttribution}
                   </p>
-                  <div className="relative mt-2">
+                  <div ref={focusTaskPickerRef} className="relative mt-2">
                     <button
                       type="button"
                       data-testid="dashboard-task-picker-trigger"

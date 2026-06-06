@@ -64,6 +64,10 @@ test("menubar task picker treats parent and child tasks as selectable tree rows"
   await taskPicker.click();
   await expect(page.getByRole("button", { name: "Start unassigned" })).toHaveCount(0);
 
+  await page.getByText("Duration").click();
+  await expect(page.getByRole("button", { name: "Collapse Write report" })).toHaveCount(0);
+
+  await taskPicker.click();
   const expandedParent = page.getByRole("button", { name: "Collapse Write report" });
   await expect(expandedParent).toBeVisible();
 
@@ -84,6 +88,11 @@ test("menubar task picker treats parent and child tasks as selectable tree rows"
 
   await parentRow.click();
   await expect(page.getByRole("button", { name: /Write report/ }).first()).toContainText("1 subtask");
+
+  await page.getByRole("button", { name: "25 min" }).click();
+  await expect(page.getByRole("button", { name: "50 min" })).toBeVisible();
+  await page.getByRole("heading", { name: "Ready to focus" }).click();
+  await expect(page.getByRole("button", { name: "50 min" })).toHaveCount(0);
 
   await page.getByRole("button", { name: /Write report/ }).first().click();
   await page.getByRole("button", { name: /^Research sources$/ }).click();

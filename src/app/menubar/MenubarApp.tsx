@@ -406,6 +406,9 @@ function IdleStartForm({
   const [showDurationOptions, setShowDurationOptions] = useState(false);
   const [showTaskPicker, setShowTaskPicker] = useState(false);
   const [showTaskCreator, setShowTaskCreator] = useState(false);
+  const taskPickerRef = useRef<HTMLDivElement | null>(null);
+  const taskCreatorRef = useRef<HTMLElement | null>(null);
+  const durationPickerRef = useRef<HTMLElement | null>(null);
   const [expandedTaskIds, setExpandedTaskIds] = useState<Set<string>>(() => new Set());
   const [collapsedTaskIds, setCollapsedTaskIds] = useState<Set<string>>(() => new Set());
   const [taskPathDraft, setTaskPathDraft] = useState("");
@@ -434,6 +437,26 @@ function IdleStartForm({
   useEffect(() => {
     onCanStartChange(Boolean(effectiveTaskId));
   }, [effectiveTaskId, onCanStartChange]);
+
+  useEffect(() => {
+    const closePickers = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+
+      if (taskPickerRef.current && !taskPickerRef.current.contains(target)) {
+        setShowTaskPicker(false);
+      }
+      if (taskCreatorRef.current && !taskCreatorRef.current.contains(target)) {
+        setShowTaskCreator(false);
+      }
+      if (durationPickerRef.current && !durationPickerRef.current.contains(target)) {
+        setShowDurationOptions(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", closePickers);
+    return () => document.removeEventListener("pointerdown", closePickers);
+  }, []);
 
   const updateSelectedTaskId = (value: string | null) => {
     setSelectedTaskId(value || null);
@@ -481,7 +504,7 @@ function IdleStartForm({
 
   return (
     <form id={MENUBAR_FORMS.idle} className="grid gap-[20px]" onSubmit={(event) => void submit(event)}>
-      <section className="grid gap-3">
+      <section ref={taskCreatorRef} className="grid gap-3">
         <div className="flex items-center justify-between gap-3">
           <p className="text-[13px] font-bold uppercase tracking-[0.16em] text-[var(--menubar-muted)]">{copy.task}</p>
           <button
@@ -495,7 +518,7 @@ function IdleStartForm({
           </button>
         </div>
 
-        <div className="relative grid gap-2">
+        <div ref={taskPickerRef} className="relative grid gap-2">
           <button
             type="button"
             onClick={() => setShowTaskPicker((value) => !value)}
@@ -593,7 +616,7 @@ function IdleStartForm({
         ) : null}
       </section>
 
-      <section className="grid gap-2">
+      <section ref={durationPickerRef} className="grid gap-2">
         <div className="flex items-center justify-between gap-3">
           <p className="text-[13px] font-bold uppercase tracking-[0.16em] text-[var(--menubar-muted)]">{copy.duration}</p>
           <button

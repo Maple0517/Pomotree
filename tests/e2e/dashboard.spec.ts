@@ -268,7 +268,8 @@ test("dashboard task displays use child title with parent context", async ({ pag
   await expect(page.getByTestId("dashboard-task-picker-menu").getByText("1 subtask")).toBeVisible();
   await expect(page.getByTestId("dashboard-task-picker-menu").getByRole("button", { name: /Click chevron.*Project/ })).toBeVisible();
   await expect(page.getByTestId("dashboard-task-picker-menu").getByRole("button", { name: /Draft/ })).toBeVisible();
-  await page.getByTestId("dashboard-task-picker-trigger").click();
+  await page.getByRole("heading", { name: "One focused session at a time" }).click();
+  await expect(page.getByTestId("dashboard-task-picker-menu")).toHaveCount(0);
 
   await page.getByLabel("Settings: Project").click();
   const rowMenu = page.locator("details.task-row-menu[open]");
