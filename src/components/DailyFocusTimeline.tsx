@@ -64,6 +64,10 @@ type TimelineAnnotation =
     };
 
 type TimelineAnnotationGroup = Omit<Extract<TimelineAnnotation, { kind: "group" }>, "layoutTopPx">;
+type SelectedTimelineDetail = TimelineSessionSummary & {
+  sessionIds: string[];
+  isGroup: boolean;
+};
 
 const ANNOTATION_HEIGHT_PX = 42;
 const ANNOTATION_GAP_PX = 8;
@@ -218,6 +222,41 @@ function TimelineMetric({ label, value, tone = "default" }: { label: string; val
   );
 }
 
+function buildSelectedTimelineDetail(sessions: TimelineSessionSummary[], sessionIds: string[] | null | undefined): SelectedTimelineDetail | null {
+  const selected = (sessionIds ?? [])
+    .map((sessionId) => sessions.find((session) => session.sessionId === sessionId))
+    .filter((session): session is TimelineSessionSummary => Boolean(session));
+
+  if (selected.length === 0) return null;
+  if (selected.length === 1) {
+    return {
+      ...selected[0],
+      sessionIds: [selected[0].sessionId],
+      isGroup: false,
+    };
+  }
+
+  const first = selected[0];
+  const last = selected.at(-1)!;
+  const sameTask = selected.every((session) => session.taskId === first.taskId);
+  const sameStatus = selected.every((session) => session.status === first.status);
+
+  return {
+    ...first,
+    sessionId: first.sessionId,
+    sessionIds: selected.map((session) => session.sessionId),
+    isGroup: true,
+    taskId: sameTask ? first.taskId : null,
+    startAt: first.startAt,
+    endAt: last.endAt,
+    focusSeconds: selected.reduce((total, session) => total + session.focusSeconds, 0),
+    pauseSeconds: selected.reduce((total, session) => total + session.pauseSeconds, 0),
+    status: sameStatus ? first.status : "partial",
+    summary: null,
+    hasTimingAnomaly: selected.some((session) => session.hasTimingAnomaly),
+  };
+}
+
 function SelectedSessionDetail({
   copy,
   selectedSession,
@@ -230,16 +269,17 @@ function SelectedSessionDetail({
   onSaveAttribution,
 }: {
   copy: TimelineCopy;
-  selectedSession: TimelineSessionSummary | null;
+  selectedSession: SelectedTimelineDetail | null;
   taskOptions: TimelineTaskOption[];
   editingSessionId: string | null;
   editingSessionTaskId: string;
-  onBeginEdit: (session: TimelineSessionSummary) => void;
+  onBeginEdit: (session: SelectedTimelineDetail) => void;
   onCancelEdit: () => void;
   onEditingSessionTaskIdChange: (taskId: string) => void;
   onSaveAttribution: () => void;
 }) {
-  const isEditingSelectedSession = selectedSession ? editingSessionId === selectedSession.sessionId : false;
+  const canEditSelectedSession = selectedSession ? !selectedSession.isGroup : false;
+  const isEditingSelectedSession = selectedSession ? canEditSelectedSession && editingSessionId === selectedSession.sessionId : false;
 
   return (
     <aside className="rounded-[1.6rem] border border-[var(--border-subtle)] bg-[var(--surface-soft)] p-4">
@@ -309,7 +349,7 @@ function SelectedSessionDetail({
                 {copy.cancel}
               </button>
             </form>
-          ) : (
+          ) : canEditSelectedSession ? (
             <button
               type="button"
               className="mt-4 rounded-full border border-[var(--border)] px-3 py-1 text-xs font-medium text-[var(--muted)]"
@@ -317,7 +357,7 @@ function SelectedSessionDetail({
             >
               {copy.correctAttribution}
             </button>
-          )}
+          ) : null}
         </div>
       ) : (
         <p className="mt-4 rounded-[1.25rem] bg-[var(--surface)] p-4 text-sm text-[var(--muted)]">{copy.noSessionsForDay}</p>
@@ -344,7 +384,7 @@ export function DailyFocusTimeline({
   onChangeSessionAttribution: (sessionId: string, taskId: string | null) => Promise<void>;
 }) {
   const [timelineDay, setTimelineDay] = useState(() => startOfLocalDay(new Date()));
-  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [selectedSessionIds, setSelectedSessionIds] = useState<string[] | null>(null);
   const [showFullDay, setShowFullDay] = useState(false);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editingSessionTaskId, setEditingSessionTaskId] = useState("");
@@ -360,11 +400,13 @@ export function DailyFocusTimeline({
       }),
     [copy.unassigned, pauses, sessions, showFullDay, tasks, timelineDay],
   );
-  const selectedSession = model.sessions.find((session) => session.sessionId === selectedSessionId) ?? model.sessions.at(-1) ?? null;
   const timelineHeight = timelineHeightFor(model);
   const hourMarks = useMemo(() => buildHourMarks(model.viewStart, model.viewEnd), [model.viewEnd, model.viewStart]);
   const annotationGroups = useMemo(() => buildAnnotationGroups(model, timelineHeight), [model, timelineHeight]);
   const annotations = useMemo(() => buildAnnotations(model, timelineHeight), [model, timelineHeight]);
+  const latestSessionId = model.sessions.at(-1)?.sessionId ?? null;
+  const defaultSelectedSessionIds = annotationGroups.find((group) => latestSessionId && group.sessionIds.includes(latestSessionId))?.sessionIds ?? null;
+  const selectedSession = buildSelectedTimelineDetail(model.sessions, selectedSessionIds ?? defaultSelectedSessionIds);
   const viewStartMs = model.viewStart.getTime();
   const viewEndMs = model.viewEnd.getTime();
   const isToday = isSameLocalDay(timelineDay, new Date());
@@ -395,7 +437,7 @@ export function DailyFocusTimeline({
             aria-label={copy.previousDay}
             onClick={() => {
               setTimelineDay((current) => addDays(current, -1));
-              setSelectedSessionId(null);
+              setSelectedSessionIds(null);
             }}
           >
             ‹
@@ -406,7 +448,7 @@ export function DailyFocusTimeline({
             aria-label={copy.nextDay}
             onClick={() => {
               setTimelineDay((current) => addDays(current, 1));
-              setSelectedSessionId(null);
+              setSelectedSessionIds(null);
             }}
           >
             ›
@@ -416,7 +458,7 @@ export function DailyFocusTimeline({
             disabled={isToday}
             onClick={() => {
               setTimelineDay(startOfLocalDay(new Date()));
-              setSelectedSessionId(null);
+              setSelectedSessionIds(null);
             }}
           >
             {copy.backToToday}
@@ -470,14 +512,14 @@ export function DailyFocusTimeline({
                 const height = projectTimeToPercent(group.endAt.getTime(), viewStartMs, viewEndMs) - top;
                 const visualHeightPx = Math.max((height / 100) * timelineHeight, 18);
                 const hitHeightPx = Math.max(visualHeightPx, 16);
-                const selected = selectedSession ? group.sessionIds.includes(selectedSession.sessionId) : false;
+                const selected = selectedSession ? group.sessionIds.some((sessionId) => selectedSession.sessionIds.includes(sessionId)) : false;
                 return (
                   <button
                     key={group.sessionIds.join("-")}
                     type="button"
                     className="absolute left-1/2 w-6 -translate-x-1/2 rounded-full bg-transparent transition hover:scale-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
                     aria-label={`${group.title} ${formatRange(group.startAt, group.endAt)}`}
-                    onClick={() => setSelectedSessionId(group.sessionIds[0] ?? null)}
+                    onClick={() => setSelectedSessionIds(group.sessionIds)}
                     style={{
                       top: `${top}%`,
                       height: hitHeightPx,
@@ -522,14 +564,14 @@ export function DailyFocusTimeline({
                       type="button"
                       className="absolute left-0 h-[42px] w-full max-w-[31rem] rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface)] px-3 text-left text-xs font-semibold text-[var(--muted-strong)] transition hover:border-[var(--accent-border)] hover:text-[var(--accent)]"
                       style={{ top: annotation.layoutTopPx }}
-                      onClick={() => setSelectedSessionId(annotation.sessionIds[0] ?? null)}
+                      onClick={() => setSelectedSessionIds(annotation.sessionIds)}
                     >
                       +{annotation.sessionIds.length} {copy.shortSessions}
                     </button>
                   );
                 }
 
-                const selected = selectedSession ? annotation.sessionIds.includes(selectedSession.sessionId) : false;
+                const selected = selectedSession ? annotation.sessionIds.some((sessionId) => selectedSession.sessionIds.includes(sessionId)) : false;
                 const annotationEndTop = projectTimeToPercent(annotation.endAt.getTime(), viewStartMs, viewEndMs);
                 const annotationHeightPx = Math.max(
                   ((annotationEndTop - projectTimeToPercent(annotation.startAt.getTime(), viewStartMs, viewEndMs)) / 100) * timelineHeight,
@@ -545,7 +587,7 @@ export function DailyFocusTimeline({
                         : "border-transparent bg-[var(--surface)]/70 hover:border-[var(--border)]"
                     }`}
                     style={{ top: annotation.layoutTopPx, height: annotationHeightPx }}
-                    onClick={() => setSelectedSessionId(annotation.sessionIds[0] ?? null)}
+                    onClick={() => setSelectedSessionIds(annotation.sessionIds)}
                   >
                     <span className="min-w-0">
                       <span className="block font-mono text-[11px] font-semibold tabular-nums text-[var(--muted-strong)]">

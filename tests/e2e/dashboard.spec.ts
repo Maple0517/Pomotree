@@ -236,6 +236,9 @@ test("daily timeline uses proportional rail segments and selectable detail", asy
   await expect(timeline.locator("aside").getByText(/10:00.*10:03/)).toBeVisible();
   const mergedAnnotation = timeline.getByRole("button", { name: /09:00.*09:50.*Deep work.*45m/ });
   await expect(mergedAnnotation).toBeVisible();
+  await mergedAnnotation.click();
+  await expect(timeline.locator("aside").getByText(/09:00.*09:50/)).toBeVisible();
+  await expect(timeline.locator("aside").getByText("45m")).toBeVisible();
 
   const rail = timeline.getByLabel("Timeline rail");
   const shortSegment = rail.locator('button[aria-label*="Quick note"]').first();
