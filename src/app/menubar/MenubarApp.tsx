@@ -2,7 +2,7 @@
 
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Check, CheckCircle2, ChevronDown, Circle, ExternalLink, Globe2, Monitor, Moon, Pause, Play, Plus, Settings, Square, Sun, Tag, Timer } from "lucide-react";
-import { getTaskPathIds } from "@/lib/services/taskSelectors";
+import { getAutoExpandedTaskIds, getTaskPathIds, getTaskRows } from "@/lib/services/taskSelectors";
 import { useAppStore } from "@/lib/store/useAppStore";
 import { computeRemainingSeconds, formatClock } from "@/lib/utils/timer";
 import type { FocusSession, Task, TaskLabel, UserSettings } from "@/types/domain";
@@ -12,6 +12,12 @@ type DurationPreset = 25 | 50 | "custom";
 type ThemeSetting = UserSettings["theme"];
 type MenubarMode = "idle" | "running" | "paused" | "finishing";
 type MenubarView = "focus" | "settings";
+
+type TaskDisplayMeta = {
+  title: string;
+  parentContext: string | null;
+  childCount: number;
+};
 
 type ActionState = {
   busy: boolean;
@@ -185,13 +191,39 @@ function menubarMode(session: FocusSession | undefined): MenubarMode {
   return "idle";
 }
 
-function taskPath(tasks: Task[], taskId: string | null | undefined) {
+function taskPathTitles(tasks: Task[], taskId: string | null | undefined) {
   if (!taskId) return null;
   const byId = new Map(tasks.map((task) => [task.id, task]));
-  return getTaskPathIds(tasks, taskId)
+  const titles = getTaskPathIds(tasks, taskId)
     .map((id) => byId.get(id)?.title)
-    .filter(Boolean)
-    .join(" / ");
+    .filter((title): title is string => Boolean(title));
+  return titles.length ? titles : null;
+}
+
+function taskPath(tasks: Task[], taskId: string | null | undefined) {
+  return taskPathTitles(tasks, taskId)?.join(" / ") ?? null;
+}
+
+function taskDisplayMeta(tasks: Task[], taskId: string | null | undefined): TaskDisplayMeta | null {
+  if (!taskId) return null;
+  const byId = new Map(tasks.map((task) => [task.id, task]));
+  const task = byId.get(taskId);
+  if (!task) return null;
+
+  const titles = taskPathTitles(tasks, taskId) ?? [];
+  const parentTitles = titles.slice(0, -1);
+  const childCount = tasks.filter((item) => item.parentId === taskId && item.status !== "archived" && item.status !== "done").length;
+
+  return {
+    title: task.title,
+    parentContext: parentTitles.length ? parentTitles.join(" / ") : null,
+    childCount,
+  };
+}
+
+function childCountLabel(count: number, language: AppLanguage) {
+  if (count <= 0) return null;
+  return language === "zh" ? `${count} 个子任务` : `${count} ${count === 1 ? "subtask" : "subtasks"}`;
 }
 
 function menubarStatusTitle(session: FocusSession | undefined, remainingSeconds: number) {
@@ -321,8 +353,67 @@ function SettingsButton({ copy, onClick }: { copy: MenubarCopy; onClick: () => v
   );
 }
 
+function TaskPickerRow({
+  language,
+  task,
+  depth,
+  hasChildren,
+  expanded,
+  selected,
+  tasks,
+  onSelect,
+  onToggleExpanded,
+}: {
+  language: AppLanguage;
+  task: Task;
+  depth: number;
+  hasChildren: boolean;
+  expanded: boolean;
+  selected: boolean;
+  tasks: Task[];
+  onSelect: (taskId: string) => void;
+  onToggleExpanded: (taskId: string) => void;
+}) {
+  const meta = taskDisplayMeta(tasks, task.id);
+  const countLabel = childCountLabel(meta?.childCount ?? 0, language);
+  const rowLabel = [task.title, countLabel, selected ? "selected" : null].filter(Boolean).join(" ");
+  const chevronLabel = `${expanded ? "Collapse" : "Expand"} ${task.title}`;
+  const indentation = Math.min(depth * 22, 66);
+
+  return (
+    <div className="flex items-stretch gap-1.5" style={{ paddingLeft: indentation }}>
+      {hasChildren ? (
+        <button
+          type="button"
+          aria-label={chevronLabel}
+          aria-expanded={expanded}
+          onClick={() => onToggleExpanded(task.id)}
+          className={`menubar-button mt-1 grid h-8 w-8 shrink-0 place-items-center rounded-[10px] ${selected ? "bg-white/15 text-current" : "bg-[var(--menubar-control-bg)] text-[var(--menubar-muted-strong)]"}`}
+        >
+          <ChevronDown className={expanded ? "transition-transform" : "-rotate-90 transition-transform"} size={15} strokeWidth={2.5} />
+        </button>
+      ) : (
+        <span className="mt-1 h-8 w-8 shrink-0" aria-hidden="true" />
+      )}
+      <button
+        type="button"
+        onClick={() => onSelect(task.id)}
+        aria-label={rowLabel}
+        className={`menubar-button flex min-h-[42px] min-w-0 flex-1 items-center justify-between gap-2 rounded-[12px] px-2.5 py-2 text-left transition ${selected ? "bg-[var(--menubar-selected-bg)] text-[var(--menubar-selected-text)] shadow-[0_8px_18px_rgba(194,65,12,0.22)]" : "text-[var(--menubar-text)] hover:bg-[var(--menubar-control-bg)]"}`}
+      >
+        <span className="min-w-0">
+          <span className="block truncate text-[14px] font-extrabold leading-[1.15]">{task.title}</span>
+          {countLabel ? <span className={`mt-0.5 block truncate text-[11px] font-bold ${selected ? "text-current/75" : "text-[var(--menubar-muted)]"}`}>{countLabel}</span> : null}
+        </span>
+        {selected ? <Check size={16} strokeWidth={2.4} className="shrink-0" /> : null}
+      </button>
+    </div>
+  );
+}
+
 function IdleStartForm({
   copy,
+  language,
   tasks,
   labels,
   defaultFocusSeconds,
@@ -332,6 +423,7 @@ function IdleStartForm({
   onStart,
 }: {
   copy: MenubarCopy;
+  language: AppLanguage;
   tasks: Task[];
   labels: TaskLabel[];
   defaultFocusSeconds: number;
@@ -346,11 +438,26 @@ function IdleStartForm({
   const [showDurationOptions, setShowDurationOptions] = useState(false);
   const [showTaskPicker, setShowTaskPicker] = useState(false);
   const [showTaskCreator, setShowTaskCreator] = useState(false);
+  const [expandedTaskIds, setExpandedTaskIds] = useState<Set<string>>(() => new Set());
+  const [collapsedTaskIds, setCollapsedTaskIds] = useState<Set<string>>(() => new Set());
   const [taskPathDraft, setTaskPathDraft] = useState("");
   const [tagDraft, setTagDraft] = useState("");
   const activeTasks = useMemo(() => tasks.filter((task) => task.status !== "archived" && task.status !== "done"), [tasks]);
   const effectiveTaskId = selectedTaskId === undefined ? defaultTaskId : selectedTaskId;
-  const selectedTaskPath = effectiveTaskId ? taskPath(tasks, effectiveTaskId) : null;
+  const autoExpandedTaskIds = useMemo(() => getAutoExpandedTaskIds(activeTasks, [effectiveTaskId]), [activeTasks, effectiveTaskId]);
+  const visibleExpandedTaskIds = useMemo(() => {
+    const next = new Set([...autoExpandedTaskIds, ...expandedTaskIds]);
+    for (const taskId of collapsedTaskIds) {
+      next.delete(taskId);
+    }
+    return next;
+  }, [autoExpandedTaskIds, collapsedTaskIds, expandedTaskIds]);
+  const activeTaskRows = useMemo(
+    () => getTaskRows(activeTasks, { expandedTaskIds: visibleExpandedTaskIds, defaultExpandedDepth: -1 }),
+    [activeTasks, visibleExpandedTaskIds],
+  );
+  const selectedTaskMeta = effectiveTaskId ? taskDisplayMeta(tasks, effectiveTaskId) : null;
+  const selectedChildCountLabel = selectedTaskMeta ? childCountLabel(selectedTaskMeta.childCount, language) : null;
   const customDurationMinutes = Math.max(1, Number(customMinutes) || 1);
   const plannedSeconds = durationPreset === "custom" ? customDurationMinutes * 60 : durationPreset * 60;
   const durationLabel = durationPreset === "custom" ? `${customDurationMinutes} min` : `${durationPreset} min`;
@@ -363,6 +470,28 @@ function IdleStartForm({
   const updateSelectedTaskId = (value: string | null) => {
     setSelectedTaskId(value || null);
     setShowTaskPicker(false);
+  };
+
+  const toggleExpandedTask = (taskId: string) => {
+    const isExpanded = visibleExpandedTaskIds.has(taskId);
+    setExpandedTaskIds((current) => {
+      const next = new Set(current);
+      if (isExpanded) {
+        next.delete(taskId);
+      } else {
+        next.add(taskId);
+      }
+      return next;
+    });
+    setCollapsedTaskIds((current) => {
+      const next = new Set(current);
+      if (isExpanded) {
+        next.add(taskId);
+      } else {
+        next.delete(taskId);
+      }
+      return next;
+    });
   };
 
   const createTask = async () => {
@@ -402,10 +531,17 @@ function IdleStartForm({
           <button
             type="button"
             onClick={() => setShowTaskPicker((value) => !value)}
-            className={`menubar-button flex min-h-[50px] w-full items-center justify-between gap-3 rounded-[12px] border px-4 py-3 text-left text-[15px] font-bold shadow-[0_10px_24px_rgba(17,19,21,0.10)] ${selectedTaskPath ? "border-[var(--menubar-selected-bg)] bg-[var(--menubar-selected-bg)] text-[var(--menubar-selected-text)]" : "border-[var(--menubar-border)] bg-[var(--menubar-soft)] text-[var(--menubar-muted-strong)]"}`}
+            className={`menubar-button flex min-h-[50px] w-full items-center justify-between gap-3 rounded-[12px] border px-4 py-3 text-left text-[15px] font-bold shadow-[0_10px_24px_rgba(17,19,21,0.10)] ${selectedTaskMeta ? "border-[var(--menubar-selected-bg)] bg-[var(--menubar-selected-bg)] text-[var(--menubar-selected-text)]" : "border-[var(--menubar-border)] bg-[var(--menubar-soft)] text-[var(--menubar-muted-strong)]"}`}
             aria-expanded={showTaskPicker}
           >
-            <span className="line-clamp-2 min-w-0">{selectedTaskPath ?? copy.startUnassigned}</span>
+            <span className="min-w-0">
+              <span className="block truncate">{selectedTaskMeta?.title ?? copy.startUnassigned}</span>
+              {selectedTaskMeta?.parentContext || selectedChildCountLabel ? (
+                <span className="mt-0.5 block truncate text-[11px] font-bold opacity-75">
+                  {selectedTaskMeta?.parentContext ?? selectedChildCountLabel}
+                </span>
+              ) : null}
+            </span>
             <ChevronDown className={`shrink-0 ${showTaskPicker ? "rotate-180 transition-transform" : "transition-transform"}`} size={17} strokeWidth={2.4} />
           </button>
 
@@ -419,18 +555,22 @@ function IdleStartForm({
                 <span>{copy.startUnassigned}</span>
                 {!effectiveTaskId ? <Check size={16} strokeWidth={2.4} /> : null}
               </button>
-              {activeTasks.map((task) => {
+              {activeTaskRows.map(({ task, depth, hasChildren }) => {
                 const selected = effectiveTaskId === task.id;
+                const expanded = visibleExpandedTaskIds.has(task.id);
                 return (
-                  <button
+                  <TaskPickerRow
                     key={task.id}
-                    type="button"
-                    onClick={() => updateSelectedTaskId(task.id)}
-                    className={`menubar-button flex min-h-10 items-center justify-between gap-3 rounded-[10px] px-3 text-left text-[14px] font-semibold ${selected ? "bg-[var(--menubar-selected-bg)] text-[var(--menubar-selected-text)]" : "text-[var(--menubar-muted-strong)] hover:bg-[var(--menubar-control-bg)]"}`}
-                  >
-                    <span className="min-w-0 truncate">{taskPath(tasks, task.id) ?? task.title}</span>
-                    {selected ? <Check size={16} strokeWidth={2.4} className="shrink-0" /> : null}
-                  </button>
+                    language={language}
+                    task={task}
+                    depth={depth}
+                    hasChildren={hasChildren}
+                    expanded={expanded}
+                    selected={selected}
+                    tasks={tasks}
+                    onSelect={updateSelectedTaskId}
+                    onToggleExpanded={toggleExpandedTask}
+                  />
                 );
               })}
             </div>
@@ -544,12 +684,15 @@ function IdleStartForm({
 }
 
 function ContextBlock({ copy, session, tasks }: { copy: MenubarCopy; session: FocusSession; tasks: Task[] }) {
-  const path = session.taskPathSnapshot ?? taskPath(tasks, session.taskId);
-  const title = session.intention?.trim() || path || copy.noGoal;
+  const meta = taskDisplayMeta(tasks, session.taskId);
+  const snapshotTitle = session.taskPathSnapshot?.split(" / ").filter(Boolean).at(-1) ?? null;
+  const title = session.intention?.trim() || meta?.title || snapshotTitle || copy.noGoal;
+  const context = meta?.parentContext ?? (session.intention?.trim() ? (session.taskPathSnapshot ?? null) : null);
 
   return (
     <section>
       <h2 className="line-clamp-2 text-[22px] font-bold leading-[1.18] tracking-[-0.02em] text-[var(--menubar-text)]">{title}</h2>
+      {context ? <p className="mt-1 truncate text-[13px] font-bold text-[var(--menubar-muted)]">{context}</p> : null}
     </section>
   );
 }
@@ -1131,6 +1274,7 @@ export function MenubarApp() {
                   ) : (
                     <IdleStartForm
                       copy={copy}
+                      language={language}
                       tasks={tasks}
                       labels={labels}
                       defaultFocusSeconds={settings.defaultFocusSeconds}

@@ -10,9 +10,10 @@ test("menubar supports idle start, interruption, pause/resume, finish, and save"
   await page.goto("/menubar", { waitUntil: "networkidle" });
 
   await expect(page.getByText("Ready to focus")).toBeVisible();
-  await expect(page.getByText("Duration")).toBeHidden();
-  await expect(page.getByRole("button", { name: "More options" })).toBeVisible();
-  await page.getByRole("textbox", { name: "Intent" }).fill("Menubar e2e focus");
+  await expect(page.getByText("Duration")).toBeVisible();
+  await page.getByRole("button", { name: "Add task" }).click();
+  await page.getByPlaceholder("Task or path, e.g. Project / Subtask").fill("Menubar e2e focus");
+  await page.getByRole("button", { name: "Add task" }).last().click();
   await page.getByRole("button", { name: "Start Focus" }).click();
 
   await expect(page.getByText("Menubar e2e focus")).toBeVisible();
@@ -42,4 +43,47 @@ test("menubar supports idle start, interruption, pause/resume, finish, and save"
   await page.getByRole("textbox", { name: "What did you complete?" }).fill("Completed menubar e2e");
   await page.getByRole("button", { name: "Save and finish" }).click();
   await expect(page.getByText("Ready to focus")).toBeVisible();
+});
+
+
+test("menubar task picker treats parent and child tasks as selectable tree rows", async ({ page }) => {
+  await page.goto("/menubar", { waitUntil: "networkidle" });
+
+  await page.getByRole("button", { name: "Add task" }).click();
+  await page.getByPlaceholder("Task or path, e.g. Project / Subtask").fill("Write report / Research sources");
+  await page.getByRole("button", { name: "Add task" }).last().click();
+
+  const taskPicker = page.getByRole("button", { name: /Research sources/ }).first();
+  await expect(taskPicker).toBeVisible();
+  await expect(taskPicker).toContainText("Research sources");
+  await expect(taskPicker).toContainText("Write report");
+
+  await taskPicker.click();
+
+  const expandedParent = page.getByRole("button", { name: "Collapse Write report" });
+  await expect(expandedParent).toBeVisible();
+
+  const parentRow = page.getByRole("button", { name: /^Write report 1 subtask$/ });
+  await expect(parentRow).toBeVisible();
+
+  const childRow = page.getByRole("button", { name: /^Research sources selected$/ });
+  await expect(childRow).toBeVisible();
+  await expect(childRow).toContainText("Research sources");
+  await expect(childRow).not.toContainText("Write report");
+
+  await expandedParent.click();
+  await expect(page.getByRole("button", { name: "Expand Write report" })).toBeVisible();
+  await expect(childRow).toBeHidden();
+
+  await page.getByRole("button", { name: "Expand Write report" }).click();
+  await expect(childRow).toBeVisible();
+
+  await parentRow.click();
+  await expect(page.getByRole("button", { name: /Write report/ }).first()).toContainText("1 subtask");
+
+  await page.getByRole("button", { name: /Write report/ }).first().click();
+  await page.getByRole("button", { name: /^Research sources$/ }).click();
+  await page.getByRole("button", { name: "Start Focus" }).click();
+  await expect(page.getByRole("heading", { name: "Research sources" })).toBeVisible();
+  await expect(page.getByText("Write report")).toBeVisible();
 });
