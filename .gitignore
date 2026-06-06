@@ -51,3 +51,5 @@ next-env.d.ts
 
 # vercel local project link
 /.vercel/
+
+.superpowers/
