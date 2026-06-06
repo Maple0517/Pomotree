@@ -261,6 +261,12 @@ test("dashboard task displays use child title with parent context", async ({ pag
   await expect(page.getByText("Draft").first()).toBeVisible();
   await expect(page.getByText("Project").first()).toBeVisible();
 
+  await expect(page.locator("#task-attribution")).toHaveCount(0);
+  await page.getByTestId("dashboard-task-picker-trigger").click();
+  await expect(page.getByTestId("dashboard-task-picker-menu")).toBeVisible();
+  await expect(page.getByTestId("dashboard-task-picker-menu").getByText("Unassigned / intention")).toHaveCount(0);
+  await expect(page.getByTestId("dashboard-task-picker-menu").getByRole("button", { name: /Draft/ })).toBeVisible();
+
   await page.getByText("Daily focus timeline").first().click();
   const timeline = page.getByRole("region", { name: "Daily focus timeline" });
   await expect(timeline.getByText("Project / Draft")).toHaveCount(0);

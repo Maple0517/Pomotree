@@ -457,6 +457,7 @@ export default function Home() {
   const [subtaskTitle, setSubtaskTitle] = useState("");
   const [expandedTaskOverrides, setExpandedTaskOverrides] = useState<Record<string, boolean>>({});
   const [showArchivedTasks, setShowArchivedTasks] = useState(true);
+  const [showFocusTaskPicker, setShowFocusTaskPicker] = useState(false);
   const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
   const [notificationStatus, setNotificationStatus] = useState<NotificationPermission | "unsupported">("unsupported");
   const lastNotifiedSessionIdRef = useRef<string | null>(null);
@@ -747,27 +748,60 @@ export default function Home() {
               </div>
               <div className="relative grid gap-4 p-6 sm:p-7">
                 <div>
-                  <label className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]" htmlFor="task-attribution">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
                     {copy.actualAttribution}
-                  </label>
-                  <select
-                    id="task-attribution"
-                    value={effectiveTaskId ?? ""}
-                    onChange={(event) => setSelectedTaskId(event.target.value || null)}
-                    className="mt-2 w-full rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm font-medium outline-none"
-                  >
-                    {activeSessionHasArchivedAttribution && activeSession?.taskId ? (
-                      <option value={activeSession.taskId} disabled>
-                        {`${copy.currentArchivedAttribution}: ${activeSession.taskPathSnapshot ?? activeTask?.title ?? copy.unknownTask}`}
-                      </option>
+                  </p>
+                  <div className="relative mt-2">
+                    <button
+                      type="button"
+                      data-testid="dashboard-task-picker-trigger"
+                      aria-label={copy.actualAttribution}
+                      aria-expanded={showFocusTaskPicker}
+                      className="flex min-h-14 w-full items-center justify-between gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-left text-sm font-semibold text-[var(--foreground)] shadow-[0_1px_0_var(--shadow-line)] transition hover:border-[var(--accent-border)]"
+                      onClick={() => setShowFocusTaskPicker((current) => !current)}
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate">{activeTaskTitle}</span>
+                        {activeTaskContext ? <span className="mt-0.5 block truncate text-xs font-medium text-[var(--muted)]">{activeTaskContext}</span> : null}
+                        {activeSessionHasArchivedAttribution && activeSession?.taskId ? (
+                          <span className="mt-0.5 block truncate text-xs font-medium text-[var(--muted)]">
+                            {`${copy.currentArchivedAttribution}: ${activeSession.taskPathSnapshot ?? activeTask?.title ?? copy.unknownTask}`}
+                          </span>
+                        ) : null}
+                      </span>
+                      <ChevronDown className={`shrink-0 text-[var(--muted)] transition ${showFocusTaskPicker ? "rotate-180" : ""}`} size={18} strokeWidth={2.2} aria-hidden="true" />
+                    </button>
+                    {showFocusTaskPicker ? (
+                      <div
+                        data-testid="dashboard-task-picker-menu"
+                        className="absolute left-0 right-0 top-full z-30 mt-2 max-h-72 overflow-y-auto rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-2 shadow-[0_20px_55px_rgba(0,0,0,0.18)]"
+                      >
+                        {activeTaskRows.map(({ task, depth }) => {
+                          const isSelected = effectiveTaskId === task.id;
+                          return (
+                            <button
+                              key={task.id}
+                              type="button"
+                              aria-label={`${copy.task}: ${task.title}${isSelected ? " selected" : ""}`}
+                              className={`flex min-h-11 w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left transition ${
+                                isSelected ? "bg-[var(--accent-soft)] text-[var(--accent)]" : "text-[var(--foreground)] hover:bg-[var(--surface-soft)]"
+                              }`}
+                              style={{ paddingLeft: depth * 20 + 12 }}
+                              onClick={() => {
+                                setSelectedTaskId(task.id);
+                                setShowFocusTaskPicker(false);
+                              }}
+                            >
+                              <span className="min-w-0">
+                                <span className="block truncate text-sm font-semibold">{task.title}</span>
+                              </span>
+                              {isSelected ? <Check className="shrink-0" size={16} strokeWidth={2.4} aria-hidden="true" /> : null}
+                            </button>
+                          );
+                        })}
+                      </div>
                     ) : null}
-                    <option value="">{copy.unassigned}</option>
-                    {activeTaskRows.map(({ task, depth }) => (
-                      <option key={task.id} value={task.id}>
-                        {`${"— ".repeat(depth)}${task.title}`}
-                      </option>
-                    ))}
-                  </select>
+                  </div>
                 </div>
                 {!activeSession ? (
                   <div className="grid gap-4 md:grid-cols-[1fr_160px]">
