@@ -196,6 +196,11 @@ function sessionStatusText(copy: DashboardCopy, status: string | undefined) {
   return status;
 }
 
+function childCountLabel(count: number, language: AppLanguage) {
+  if (count <= 0) return null;
+  return language === "zh" ? `${count} 个子任务` : `${count} ${count === 1 ? "subtask" : "subtasks"}`;
+}
+
 const DASHBOARD_TEXT: Record<AppLanguage, DashboardCopy> = {
   en: {
     add: "Add",
@@ -521,10 +526,11 @@ export default function Home() {
 
   const activeSession = sessions.find((session) => ["running", "paused", "finishing"].includes(session.status));
   const activeTask = activeSession?.taskId ? tasks.find((task) => task.id === activeSession.taskId) : undefined;
+  const activeTasks = useMemo(() => tasks.filter((task) => task.status !== "archived" && task.status !== "done"), [tasks]);
   const activeTaskRows = useMemo(() => getActiveTaskRows(tasks), [tasks]);
-  const activeTaskChildrenMap = useMemo(() => getTaskChildrenMap(tasks, { includeArchived: false }), [tasks]);
+  const activeTaskChildrenMap = useMemo(() => getTaskChildrenMap(activeTasks, { includeArchived: false }), [activeTasks]);
   const archivedBranchRoots = useMemo(() => getArchivedBranchRoots(tasks), [tasks]);
-  const activeTaskIdSet = useMemo(() => new Set(tasks.filter((task) => task.status !== "archived" && task.status !== "done").map((task) => task.id)), [tasks]);
+  const activeTaskIdSet = useMemo(() => new Set(activeTasks.map((task) => task.id)), [activeTasks]);
   const lastTaskId = useMemo(() => lastActiveSessionTaskId(sessions, activeTaskIdSet), [activeTaskIdSet, sessions]);
   const firstActiveTaskId = activeTaskRows[0]?.task.id ?? null;
   const defaultTaskId = activeSession?.taskId ?? lastTaskId ?? firstActiveTaskId;
@@ -560,6 +566,10 @@ export default function Home() {
   const visibleTaskRows = useMemo(
     () => getTaskRows(tasks, { includeArchived: false, expandedTaskIds, defaultExpandedDepth: -1, filterTaskIds: filteredTaskIds }),
     [expandedTaskIds, filteredTaskIds, tasks],
+  );
+  const focusTaskPickerRows = useMemo(
+    () => getTaskRows(activeTasks, { includeArchived: false, expandedTaskIds, defaultExpandedDepth: -1 }),
+    [activeTasks, expandedTaskIds],
   );
 
   const activeTaskDisplay = dashboardTaskDisplay(tasks, { activeSession, taskId: effectiveTaskId, fallbackTitle: copy.noTaskSelected });
@@ -776,27 +786,50 @@ export default function Home() {
                         data-testid="dashboard-task-picker-menu"
                         className="absolute left-0 right-0 top-full z-30 mt-2 max-h-72 overflow-y-auto rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-2 shadow-[0_20px_55px_rgba(0,0,0,0.18)]"
                       >
-                        {activeTaskRows.map(({ task, depth }) => {
+                        {focusTaskPickerRows.map(({ task, depth, hasChildren }) => {
                           const isSelected = effectiveTaskId === task.id;
+                          const isExpanded = hasChildren ? expandedTaskIds.has(task.id) : false;
+                          const taskMeta = getTaskDisplayMeta(tasks, task.id);
+                          const countLabel = childCountLabel(taskMeta?.childCount ?? 0, language);
                           return (
-                            <button
+                            <div
                               key={task.id}
-                              type="button"
-                              aria-label={`${copy.task}: ${task.title}${isSelected ? " selected" : ""}`}
-                              className={`flex min-h-11 w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left transition ${
-                                isSelected ? "bg-[var(--accent-soft)] text-[var(--accent)]" : "text-[var(--foreground)] hover:bg-[var(--surface-soft)]"
-                              }`}
-                              style={{ paddingLeft: depth * 20 + 12 }}
-                              onClick={() => {
-                                setSelectedTaskId(task.id);
-                                setShowFocusTaskPicker(false);
-                              }}
+                              className="flex items-stretch gap-2"
+                              style={{ paddingLeft: depth * 22 }}
                             >
-                              <span className="min-w-0">
-                                <span className="block truncate text-sm font-semibold">{task.title}</span>
-                              </span>
-                              {isSelected ? <Check className="shrink-0" size={16} strokeWidth={2.4} aria-hidden="true" /> : null}
-                            </button>
+                              {hasChildren ? (
+                                <button
+                                  type="button"
+                                  aria-label={`${copy.toggleTaskHint}: ${task.title}`}
+                                  aria-expanded={isExpanded}
+                                  className="mt-1 grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-[var(--surface-soft)] text-[var(--muted)] transition hover:bg-[var(--surface)] hover:text-[var(--foreground)]"
+                                  onClick={() => toggleTaskExpansion(task.id)}
+                                >
+                                  {isExpanded ? <ChevronDown size={18} strokeWidth={2.2} aria-hidden="true" /> : <ChevronRight size={18} strokeWidth={2.2} aria-hidden="true" />}
+                                </button>
+                              ) : (
+                                <span className="mt-1 h-10 w-10 shrink-0" aria-hidden="true" />
+                              )}
+                              <button
+                                type="button"
+                                aria-label={`${copy.task}: ${task.title}${isSelected ? " selected" : ""}`}
+                                className={`flex min-h-14 min-w-0 flex-1 items-center justify-between gap-3 rounded-2xl px-4 py-3 text-left transition ${
+                                  isSelected
+                                    ? "bg-[var(--surface)] text-[var(--foreground)] shadow-[0_1px_0_var(--shadow-line),0_12px_30px_rgba(0,0,0,0.05)] ring-1 ring-[var(--accent-border)]"
+                                    : "text-[var(--foreground)] hover:bg-[var(--surface-soft)]"
+                                }`}
+                                onClick={() => {
+                                  setSelectedTaskId(task.id);
+                                  setShowFocusTaskPicker(false);
+                                }}
+                              >
+                                <span className="min-w-0">
+                                  <span className="block truncate text-base font-semibold tracking-tight">{task.title}</span>
+                                  {countLabel ? <span className="mt-0.5 block truncate text-sm font-semibold text-[var(--muted)]">{countLabel}</span> : null}
+                                </span>
+                                {isSelected ? <Check className="shrink-0" size={18} strokeWidth={2.4} aria-hidden="true" /> : null}
+                              </button>
+                            </div>
                           );
                         })}
                       </div>

@@ -265,6 +265,8 @@ test("dashboard task displays use child title with parent context", async ({ pag
   await page.getByTestId("dashboard-task-picker-trigger").click();
   await expect(page.getByTestId("dashboard-task-picker-menu")).toBeVisible();
   await expect(page.getByTestId("dashboard-task-picker-menu").getByText("Unassigned / intention")).toHaveCount(0);
+  await expect(page.getByTestId("dashboard-task-picker-menu").getByText("1 subtask")).toBeVisible();
+  await expect(page.getByTestId("dashboard-task-picker-menu").getByRole("button", { name: /Click chevron.*Project/ })).toBeVisible();
   await expect(page.getByTestId("dashboard-task-picker-menu").getByRole("button", { name: /Draft/ })).toBeVisible();
   await page.getByTestId("dashboard-task-picker-trigger").click();
 
