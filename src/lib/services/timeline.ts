@@ -1,4 +1,5 @@
 import type { FocusSession, Task, TimerPause } from "@/types/domain";
+import { splitTaskPathSnapshot } from "@/lib/services/taskSelectors";
 
 export type TimelineSegmentKind = "focus" | "pause";
 
@@ -159,7 +160,7 @@ function intervalSeconds(interval: TimeInterval) {
 
 function titleForSession(session: FocusSession, taskTitleById: Map<string, string>, fallbackTitle: string) {
   return (
-    session.taskPathSnapshot?.trim() ||
+    splitTaskPathSnapshot(session.taskPathSnapshot)?.at(-1) ||
     session.intention?.trim() ||
     (session.taskId ? taskTitleById.get(session.taskId) : null) ||
     fallbackTitle

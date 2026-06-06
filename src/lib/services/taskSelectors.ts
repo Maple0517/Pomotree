@@ -6,6 +6,12 @@ export interface TaskRow {
   hasChildren: boolean;
 }
 
+export interface TaskDisplayMeta {
+  title: string;
+  parentContext: string | null;
+  childCount: number;
+}
+
 function getTaskParentKey(parentId: string | null) {
   return parentId ?? "__task_root__";
 }
@@ -45,6 +51,51 @@ export function getTaskPathIds(tasks: Task[], taskId: string | null | undefined)
   }
 
   return path;
+}
+
+export function getTaskPathTitles(tasks: Task[], taskId: string | null | undefined) {
+  if (!taskId) return null;
+  const byId = new Map(tasks.map((task) => [task.id, task]));
+  const titles = getTaskPathIds(tasks, taskId)
+    .map((id) => byId.get(id)?.title)
+    .filter((title): title is string => Boolean(title));
+  return titles.length ? titles : null;
+}
+
+export function splitTaskPathSnapshot(snapshot: string | null | undefined) {
+  const titles = snapshot
+    ?.split("/")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  return titles?.length ? titles : null;
+}
+
+export function getTaskDisplayMeta(tasks: Task[], taskId: string | null | undefined): TaskDisplayMeta | null {
+  if (!taskId) return null;
+  const byId = new Map(tasks.map((task) => [task.id, task]));
+  const task = byId.get(taskId);
+  if (!task) return null;
+
+  const titles = getTaskPathTitles(tasks, taskId) ?? [];
+  const parentTitles = titles.slice(0, -1);
+  const childCount = tasks.filter((item) => item.parentId === taskId && item.status !== "archived" && item.status !== "done").length;
+
+  return {
+    title: task.title,
+    parentContext: parentTitles.length ? parentTitles.join(" / ") : null,
+    childCount,
+  };
+}
+
+export function getTaskDisplayMetaFromSnapshot(snapshot: string | null | undefined): Omit<TaskDisplayMeta, "childCount"> | null {
+  const titles = splitTaskPathSnapshot(snapshot);
+  if (!titles) return null;
+
+  const parentTitles = titles.slice(0, -1);
+  return {
+    title: titles.at(-1) ?? "",
+    parentContext: parentTitles.length ? parentTitles.join(" / ") : null,
+  };
 }
 
 export function getTaskIdsMatchingLabel(tasks: Task[], labelId: string | null) {

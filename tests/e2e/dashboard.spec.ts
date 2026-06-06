@@ -127,6 +127,94 @@ async function seedTimelineData(page: Page) {
   );
 }
 
+async function seedNestedTaskDisplayData(page: Page) {
+  const dbName = await page.evaluate(() => window.localStorage.getItem("pomotree-db-name"));
+  if (!dbName) throw new Error("Missing e2e database name");
+
+  await page.evaluate(
+    async ({ databaseName, timestamps }) => {
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = window.indexedDB.open(databaseName);
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result);
+      });
+
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(["tasks", "focusSessions"], "readwrite");
+        const tasks = tx.objectStore("tasks");
+        const sessions = tx.objectStore("focusSessions");
+
+        tasks.put({
+          id: "task-project",
+          parentId: null,
+          title: "Project",
+          status: "todo",
+          sortOrder: 0,
+          createdAt: timestamps.createdAt,
+          updatedAt: timestamps.createdAt,
+        });
+        tasks.put({
+          id: "task-draft",
+          parentId: "task-project",
+          title: "Draft",
+          status: "todo",
+          sortOrder: 0,
+          createdAt: timestamps.createdAt,
+          updatedAt: timestamps.createdAt,
+        });
+
+        sessions.put({
+          id: "session-running-child",
+          taskId: "task-draft",
+          originalTaskId: "task-draft",
+          taskPathSnapshot: "Project / Draft",
+          originalTaskPathSnapshot: "Project / Draft",
+          intention: null,
+          summary: null,
+          plannedSeconds: 1500,
+          actualSeconds: 0,
+          status: "running",
+          startedAt: timestamps.runningStart,
+          endedAt: null,
+          createdAt: timestamps.runningStart,
+          updatedAt: timestamps.runningStart,
+        });
+        sessions.put({
+          id: "session-completed-child",
+          taskId: "task-draft",
+          originalTaskId: "task-draft",
+          taskPathSnapshot: "Project / Draft",
+          originalTaskPathSnapshot: "Project / Draft",
+          intention: null,
+          summary: "Nested task session",
+          plannedSeconds: 600,
+          actualSeconds: 600,
+          status: "completed",
+          startedAt: timestamps.completedStart,
+          endedAt: timestamps.completedEnd,
+          createdAt: timestamps.completedStart,
+          updatedAt: timestamps.completedEnd,
+        });
+
+        tx.oncomplete = () => {
+          db.close();
+          resolve();
+        };
+        tx.onerror = () => reject(tx.error);
+      });
+    },
+    {
+      databaseName: dbName,
+      timestamps: {
+        createdAt: new Date().toISOString(),
+        runningStart: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+        completedStart: todayAt(8, 0),
+        completedEnd: todayAt(8, 10),
+      },
+    },
+  );
+}
+
 test.beforeEach(async ({ page }, testInfo) => {
   await page.addInitScript((dbName) => {
     window.localStorage.setItem("pomotree-db-name", dbName);
@@ -163,6 +251,20 @@ test("daily timeline uses proportional rail segments and selectable detail", asy
 
   await timeline.getByRole("button", { name: "Full day" }).click();
   await expect(timeline.getByRole("button", { name: "Active hours" })).toBeVisible();
+});
+
+test("dashboard task displays use child title with parent context", async ({ page }) => {
+  await seedNestedTaskDisplayData(page);
+  await page.reload({ waitUntil: "networkidle" });
+
+  await expect(page.getByText("Project / Draft")).toHaveCount(0);
+  await expect(page.getByText("Draft").first()).toBeVisible();
+  await expect(page.getByText("Project").first()).toBeVisible();
+
+  await page.getByText("Daily focus timeline").first().click();
+  const timeline = page.getByRole("region", { name: "Daily focus timeline" });
+  await expect(timeline.getByText("Project / Draft")).toHaveCount(0);
+  await expect(timeline.getByText("Draft").first()).toBeVisible();
 });
 
 test("daily timeline date navigation handles empty days and mobile width", async ({ page }) => {

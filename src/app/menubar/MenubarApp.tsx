@@ -2,7 +2,7 @@
 
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Check, CheckCircle2, ChevronDown, Circle, ExternalLink, Globe2, Monitor, Moon, Pause, Play, Plus, Settings, Square, Sun, Tag, Timer } from "lucide-react";
-import { getAutoExpandedTaskIds, getTaskPathIds, getTaskRows } from "@/lib/services/taskSelectors";
+import { getAutoExpandedTaskIds, getTaskDisplayMeta, getTaskPathTitles, getTaskRows, splitTaskPathSnapshot } from "@/lib/services/taskSelectors";
 import { useAppStore } from "@/lib/store/useAppStore";
 import { computeRemainingSeconds, formatClock } from "@/lib/utils/timer";
 import type { FocusSession, Task, TaskLabel, UserSettings } from "@/types/domain";
@@ -12,12 +12,6 @@ type DurationPreset = 25 | 50 | "custom";
 type ThemeSetting = UserSettings["theme"];
 type MenubarMode = "idle" | "running" | "paused" | "finishing";
 type MenubarView = "focus" | "settings";
-
-type TaskDisplayMeta = {
-  title: string;
-  parentContext: string | null;
-  childCount: number;
-};
 
 type ActionState = {
   busy: boolean;
@@ -191,34 +185,8 @@ function menubarMode(session: FocusSession | undefined): MenubarMode {
   return "idle";
 }
 
-function taskPathTitles(tasks: Task[], taskId: string | null | undefined) {
-  if (!taskId) return null;
-  const byId = new Map(tasks.map((task) => [task.id, task]));
-  const titles = getTaskPathIds(tasks, taskId)
-    .map((id) => byId.get(id)?.title)
-    .filter((title): title is string => Boolean(title));
-  return titles.length ? titles : null;
-}
-
 function taskPath(tasks: Task[], taskId: string | null | undefined) {
-  return taskPathTitles(tasks, taskId)?.join(" / ") ?? null;
-}
-
-function taskDisplayMeta(tasks: Task[], taskId: string | null | undefined): TaskDisplayMeta | null {
-  if (!taskId) return null;
-  const byId = new Map(tasks.map((task) => [task.id, task]));
-  const task = byId.get(taskId);
-  if (!task) return null;
-
-  const titles = taskPathTitles(tasks, taskId) ?? [];
-  const parentTitles = titles.slice(0, -1);
-  const childCount = tasks.filter((item) => item.parentId === taskId && item.status !== "archived" && item.status !== "done").length;
-
-  return {
-    title: task.title,
-    parentContext: parentTitles.length ? parentTitles.join(" / ") : null,
-    childCount,
-  };
+  return getTaskPathTitles(tasks, taskId)?.join(" / ") ?? null;
 }
 
 function childCountLabel(count: number, language: AppLanguage) {
@@ -374,7 +342,7 @@ function TaskPickerRow({
   onSelect: (taskId: string) => void;
   onToggleExpanded: (taskId: string) => void;
 }) {
-  const meta = taskDisplayMeta(tasks, task.id);
+  const meta = getTaskDisplayMeta(tasks, task.id);
   const countLabel = childCountLabel(meta?.childCount ?? 0, language);
   const rowLabel = [task.title, countLabel, selected ? "selected" : null].filter(Boolean).join(" ");
   const chevronLabel = `${expanded ? "Collapse" : "Expand"} ${task.title}`;
@@ -456,7 +424,7 @@ function IdleStartForm({
     () => getTaskRows(activeTasks, { expandedTaskIds: visibleExpandedTaskIds, defaultExpandedDepth: -1 }),
     [activeTasks, visibleExpandedTaskIds],
   );
-  const selectedTaskMeta = effectiveTaskId ? taskDisplayMeta(tasks, effectiveTaskId) : null;
+  const selectedTaskMeta = effectiveTaskId ? getTaskDisplayMeta(tasks, effectiveTaskId) : null;
   const selectedChildCountLabel = selectedTaskMeta ? childCountLabel(selectedTaskMeta.childCount, language) : null;
   const customDurationMinutes = Math.max(1, Number(customMinutes) || 1);
   const plannedSeconds = durationPreset === "custom" ? customDurationMinutes * 60 : durationPreset * 60;
@@ -676,8 +644,8 @@ function IdleStartForm({
 }
 
 function ContextBlock({ copy, session, tasks }: { copy: MenubarCopy; session: FocusSession; tasks: Task[] }) {
-  const meta = taskDisplayMeta(tasks, session.taskId);
-  const snapshotTitle = session.taskPathSnapshot?.split(" / ").filter(Boolean).at(-1) ?? null;
+  const meta = getTaskDisplayMeta(tasks, session.taskId);
+  const snapshotTitle = splitTaskPathSnapshot(session.taskPathSnapshot)?.at(-1) ?? null;
   const title = session.intention?.trim() || meta?.title || snapshotTitle || copy.noGoal;
   const context = meta?.parentContext ?? (session.intention?.trim() ? (session.taskPathSnapshot ?? null) : null);
 

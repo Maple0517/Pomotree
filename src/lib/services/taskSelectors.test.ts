@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
 import type { Task } from "@/types/domain";
-import { getActiveTaskRows, getArchivedBranchRoots, getAutoExpandedTaskIds, getTaskIdsMatchingLabel, getTaskPathIds, getTaskRows, isArchivedBranchRoot } from "./taskSelectors";
+import {
+  getActiveTaskRows,
+  getArchivedBranchRoots,
+  getAutoExpandedTaskIds,
+  getTaskDisplayMeta,
+  getTaskDisplayMetaFromSnapshot,
+  getTaskIdsMatchingLabel,
+  getTaskPathIds,
+  getTaskRows,
+  isArchivedBranchRoot,
+} from "./taskSelectors";
 
 const now = "2026-05-26T00:00:00.000Z";
 
@@ -78,6 +88,18 @@ describe("task selectors", () => {
   it("builds task paths and auto-expanded ancestor ids", () => {
     expect(getTaskPathIds(tasks, "draft")).toEqual(["project", "draft"]);
     expect([...getAutoExpandedTaskIds(tasks, ["draft"])]).toEqual(["project"]);
+  });
+
+  it("builds task display metadata from task trees and path snapshots", () => {
+    expect(getTaskDisplayMeta(tasks, "draft")).toMatchObject({
+      title: "Draft",
+      parentContext: "Project",
+      childCount: 0,
+    });
+    expect(getTaskDisplayMetaFromSnapshot("Project / Draft")).toEqual({
+      title: "Draft",
+      parentContext: "Project",
+    });
   });
 
   it("filters by label while preserving ancestor context", () => {

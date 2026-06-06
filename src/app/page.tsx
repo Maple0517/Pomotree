@@ -2,11 +2,20 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Archive, Check, ChevronDown, ChevronRight, MoreHorizontal, Sprout, Timer } from "lucide-react";
-import { getActiveTaskRows, getArchivedBranchRoots, getAutoExpandedTaskIds, getTaskChildrenMap, getTaskIdsMatchingLabel, getTaskRows } from "@/lib/services/taskSelectors";
+import {
+  getActiveTaskRows,
+  getArchivedBranchRoots,
+  getAutoExpandedTaskIds,
+  getTaskChildrenMap,
+  getTaskDisplayMeta,
+  getTaskDisplayMetaFromSnapshot,
+  getTaskIdsMatchingLabel,
+  getTaskRows,
+} from "@/lib/services/taskSelectors";
 import { useAppStore } from "@/lib/store/useAppStore";
 import { computeRemainingSeconds, formatClock } from "@/lib/utils/timer";
 import { formatDuration, getTaskStats, getTodayStats } from "@/lib/services/stats";
-import type { TaskLabel, UserSettings } from "@/types/domain";
+import type { FocusSession, Task, TaskLabel, UserSettings } from "@/types/domain";
 import { CloudSyncPanel } from "@/components/CloudSyncPanel";
 import { DailyFocusTimeline } from "@/components/DailyFocusTimeline";
 
@@ -143,6 +152,32 @@ function taskLabelNames(taskLabels: TaskLabel[], labelIds: string[] | undefined)
 
 function labelInputValue(taskLabels: TaskLabel[], labelIds: string[] | undefined) {
   return taskLabelNames(taskLabels, labelIds).map((label) => label.name).join(", ");
+}
+
+function dashboardTaskDisplay(
+  tasks: Task[],
+  options: {
+    activeSession: FocusSession | undefined;
+    taskId: string | null | undefined;
+    fallbackTitle: string;
+  },
+) {
+  const { activeSession, taskId, fallbackTitle } = options;
+  const liveMeta = getTaskDisplayMeta(tasks, activeSession?.taskId ?? taskId);
+  const snapshotMeta = getTaskDisplayMetaFromSnapshot(activeSession?.taskPathSnapshot);
+  const intention = activeSession?.intention?.trim();
+
+  if (intention) {
+    return {
+      title: intention,
+      context: activeSession?.taskPathSnapshot?.trim() || liveMeta?.parentContext || null,
+    };
+  }
+
+  return {
+    title: liveMeta?.title || snapshotMeta?.title || fallbackTitle,
+    context: liveMeta?.parentContext || snapshotMeta?.parentContext || null,
+  };
 }
 
 function lastActiveSessionTaskId(sessions: Array<{ taskId: string | null; status: string; endedAt: string | null; updatedAt: string }>, activeTaskIds: Set<string>) {
@@ -526,9 +561,9 @@ export default function Home() {
     [expandedTaskIds, filteredTaskIds, tasks],
   );
 
-  const activeTaskTitle = activeSession?.intention
-    ? activeSession.intention
-    : activeSession?.taskPathSnapshot ?? tasks.find((task) => task.id === effectiveTaskId)?.title ?? copy.noTaskSelected;
+  const activeTaskDisplay = dashboardTaskDisplay(tasks, { activeSession, taskId: effectiveTaskId, fallbackTitle: copy.noTaskSelected });
+  const activeTaskTitle = activeTaskDisplay.title;
+  const activeTaskContext = activeTaskDisplay.context;
   const customPlannedSeconds = plannedMinutes.trim() ? Math.max(1, Number(plannedMinutes)) * 60 : undefined;
   const previewPlannedSeconds = customPlannedSeconds ?? settings.defaultFocusSeconds;
   const remainingSeconds = activeSession ? computeRemainingSeconds(activeSession, pauses, now) : previewPlannedSeconds;
@@ -656,6 +691,9 @@ export default function Home() {
                   </div>
                   <h2 className="mt-5 font-mono text-[5.4rem] font-bold leading-[0.86] tracking-[-0.09em] tabular-nums text-[var(--foreground)] sm:text-[7.25rem]" aria-label={`${copy.planned} ${formatClock(remainingSeconds)}`}>{formatClock(remainingSeconds)}</h2>
                   <p className="mt-5 max-w-[52ch] truncate text-lg font-semibold tracking-tight text-[var(--foreground)]">{activeTaskTitle}</p>
+                  {activeTaskContext ? (
+                    <p className="mt-1 max-w-[52ch] truncate text-sm font-semibold text-[var(--muted)]">{activeTaskContext}</p>
+                  ) : null}
                   <p className="mt-2 text-sm font-medium text-[var(--muted)]">
                     {sessionStatusText(copy, activeSession?.status)} · {copy.planned} {Math.round((activeSession?.plannedSeconds ?? previewPlannedSeconds) / 60)} min
                   </p>
