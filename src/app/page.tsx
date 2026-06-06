@@ -681,7 +681,7 @@ export default function Home() {
 
         <section className="grid min-w-0 flex-1 items-start gap-6 py-6 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_380px]">
           <div className="grid min-w-0 content-start gap-6">
-            <section className="relative overflow-hidden rounded-[2.25rem] border border-[var(--border)] bg-[var(--surface)] shadow-[0_22px_80px_rgba(0,0,0,0.08)]">
+            <section className="relative overflow-visible rounded-[2.25rem] border border-[var(--border)] bg-[var(--surface)] shadow-[0_22px_80px_rgba(0,0,0,0.08)]">
               <div className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-[var(--accent-soft)] blur-3xl" aria-hidden="true" />
               <div className="pointer-events-none absolute bottom-0 left-0 h-px w-full bg-linear-to-r from-transparent via-[var(--accent-border)] to-transparent" aria-hidden="true" />
               <div className="relative grid gap-7 p-6 sm:p-7 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
@@ -922,7 +922,7 @@ export default function Home() {
                     </button>
                   ))}
                 </div>
-                <div className="mt-5 overflow-hidden rounded-[1.6rem] border border-[var(--border)] bg-[var(--surface-soft)] p-1">
+                <div className="mt-5 overflow-visible rounded-[1.6rem] border border-[var(--border)] bg-[var(--surface-soft)] p-1">
                   {visibleTaskRows.length === 0 ? (
                     <EmptyState icon={<Sprout size={20} strokeWidth={1.8} />} title={selectedLabel ? `${copy.noTasksYet} (${selectedLabel.name})` : copy.noTasksYet} action={copy.addTaskPlaceholder} />
                   ) : (
