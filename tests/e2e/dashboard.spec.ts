@@ -232,6 +232,8 @@ test("daily timeline uses proportional rail segments and selectable detail", asy
   await expect(timeline.getByRole("button", { name: "Full day" })).toBeVisible();
   await expect(timeline.getByText("Deep work").first()).toBeVisible();
   await expect(timeline.getByText("Quick note").first()).toBeVisible();
+  await expect(timeline.locator("aside").getByText("Quick note")).toBeVisible();
+  await expect(timeline.locator("aside").getByText(/10:00.*10:03/)).toBeVisible();
   const mergedAnnotation = timeline.getByRole("button", { name: /09:00.*09:50.*Deep work.*45m/ });
   await expect(mergedAnnotation).toBeVisible();
 

@@ -360,7 +360,7 @@ export function DailyFocusTimeline({
       }),
     [copy.unassigned, pauses, sessions, showFullDay, tasks, timelineDay],
   );
-  const selectedSession = model.sessions.find((session) => session.sessionId === selectedSessionId) ?? model.sessions[0] ?? null;
+  const selectedSession = model.sessions.find((session) => session.sessionId === selectedSessionId) ?? model.sessions.at(-1) ?? null;
   const timelineHeight = timelineHeightFor(model);
   const hourMarks = useMemo(() => buildHourMarks(model.viewStart, model.viewEnd), [model.viewEnd, model.viewStart]);
   const annotationGroups = useMemo(() => buildAnnotationGroups(model, timelineHeight), [model, timelineHeight]);
