@@ -10,6 +10,8 @@ test("menubar supports idle start, interruption, pause/resume, finish, and save"
   await page.goto("/menubar", { waitUntil: "networkidle" });
 
   await expect(page.getByText("Ready to focus")).toBeVisible();
+  const menubarBox = await page.locator("main").boundingBox();
+  expect(Math.round(menubarBox?.height ?? 0)).toBe(580);
   await expect(page.getByRole("button", { name: "Start Focus" })).toBeDisabled();
   await expect(page.getByText("Duration")).toBeVisible();
   await page.getByRole("button", { name: "Add task" }).click();

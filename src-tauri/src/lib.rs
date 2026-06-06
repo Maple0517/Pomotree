@@ -79,7 +79,7 @@ fn position_main_window(app: &AppHandle, tray_anchor: Option<TrayAnchor>) {
     let window_size = window
         .outer_size()
         .or_else(|_| window.inner_size())
-        .unwrap_or_else(|_| PhysicalSize::new(380, 450));
+        .unwrap_or_else(|_| PhysicalSize::new(380, 580));
     let window_width = window_size.width as i32;
     let window_height = window_size.height as i32;
 

@@ -1210,7 +1210,7 @@ export function MenubarApp() {
   const contentPadding = activeSession?.status === "finishing" ? "px-5 pt-5 pb-0" : "px-5 pt-[26px] pb-2";
 
   return (
-    <main className="h-[450px] w-[380px] overflow-hidden bg-transparent text-[var(--menubar-text)]">
+    <main className="h-[580px] w-[380px] overflow-hidden bg-transparent text-[var(--menubar-text)]">
       <section className="menubar-shell isolate flex h-full w-full flex-col overflow-hidden rounded-[32px] border border-[var(--menubar-border)] [background:var(--menubar-surface)]">
         <div className="min-h-0 flex-1 overflow-y-auto">
           {view === "settings" ? (
