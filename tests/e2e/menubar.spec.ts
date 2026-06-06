@@ -10,6 +10,7 @@ test("menubar supports idle start, interruption, pause/resume, finish, and save"
   await page.goto("/menubar", { waitUntil: "networkidle" });
 
   await expect(page.getByText("Ready to focus")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Start Focus" })).toBeDisabled();
   await expect(page.getByText("Duration")).toBeVisible();
   await page.getByRole("button", { name: "Add task" }).click();
   await page.getByPlaceholder("Task or path, e.g. Project / Subtask").fill("Menubar e2e focus");
@@ -59,6 +60,7 @@ test("menubar task picker treats parent and child tasks as selectable tree rows"
   await expect(taskPicker).toContainText("Write report");
 
   await taskPicker.click();
+  await expect(page.getByRole("button", { name: "Start unassigned" })).toHaveCount(0);
 
   const expandedParent = page.getByRole("button", { name: "Collapse Write report" });
   await expect(expandedParent).toBeVisible();

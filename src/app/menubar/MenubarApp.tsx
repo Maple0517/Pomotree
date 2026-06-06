@@ -29,6 +29,7 @@ type MenubarCopy = {
   attribution: string;
   back: string;
   capturePlaceholder: string;
+  chooseTask: string;
   custom: string;
   addDetails: string;
   addTask: string;
@@ -65,7 +66,6 @@ type MenubarCopy = {
   saved: string;
   settingsHint: string;
   startFocus: string;
-  startUnassigned: string;
   task: string;
   tag: string;
   tipAfterCapture: string;
@@ -81,6 +81,7 @@ const TEXT: Record<AppLanguage, MenubarCopy> = {
     attribution: "Attribution",
     back: "Back",
     capturePlaceholder: "Something on your mind?",
+    chooseTask: "Choose a task",
     custom: "Custom",
     addDetails: "Add details",
     addTask: "Add task",
@@ -117,7 +118,6 @@ const TEXT: Record<AppLanguage, MenubarCopy> = {
     saved: "Saved",
     settingsHint: "Settings are saved locally on this device.",
     startFocus: "Start Focus",
-    startUnassigned: "Start unassigned",
     task: "Task",
     tag: "Tag",
     tipAfterCapture: "Capture it, then continue your focus without breaking flow.",
@@ -131,6 +131,7 @@ const TEXT: Record<AppLanguage, MenubarCopy> = {
     attribution: "归属任务",
     back: "返回",
     capturePlaceholder: "突然想到什么？",
+    chooseTask: "选择任务",
     custom: "自定义",
     addDetails: "补充详情",
     addTask: "添加任务",
@@ -167,7 +168,6 @@ const TEXT: Record<AppLanguage, MenubarCopy> = {
     saved: "已保存",
     settingsHint: "设置会保存在本机。",
     startFocus: "开始专注",
-    startUnassigned: "不绑定任务开始",
     task: "任务",
     tag: "标签",
     tipAfterCapture: "先记录下来，然后继续专注，不打断思路。",
@@ -464,8 +464,8 @@ function IdleStartForm({
   const normalizedTagDraft = tagDraft.trim().replace(/^#+/, "").trim();
 
   useEffect(() => {
-    onCanStartChange(true);
-  }, [onCanStartChange]);
+    onCanStartChange(Boolean(effectiveTaskId));
+  }, [effectiveTaskId, onCanStartChange]);
 
   const updateSelectedTaskId = (value: string | null) => {
     setSelectedTaskId(value || null);
@@ -535,7 +535,7 @@ function IdleStartForm({
             aria-expanded={showTaskPicker}
           >
             <span className="min-w-0">
-              <span className="block truncate">{selectedTaskMeta?.title ?? copy.startUnassigned}</span>
+              <span className="block truncate">{selectedTaskMeta?.title ?? copy.chooseTask}</span>
               {selectedTaskMeta?.parentContext || selectedChildCountLabel ? (
                 <span className="mt-0.5 block truncate text-[11px] font-bold opacity-75">
                   {selectedTaskMeta?.parentContext ?? selectedChildCountLabel}
@@ -547,14 +547,6 @@ function IdleStartForm({
 
           {showTaskPicker ? (
             <div className="grid max-h-[210px] gap-1 overflow-y-auto rounded-[14px] border border-[var(--menubar-border)] bg-[var(--menubar-soft)] p-2 shadow-[0_16px_34px_rgba(17,19,21,0.18)]">
-              <button
-                type="button"
-                onClick={() => updateSelectedTaskId(null)}
-                className={`menubar-button flex min-h-10 items-center justify-between rounded-[10px] px-3 text-left text-[14px] font-semibold ${!effectiveTaskId ? "bg-[var(--menubar-selected-bg)] text-[var(--menubar-selected-text)]" : "text-[var(--menubar-muted-strong)] hover:bg-[var(--menubar-control-bg)]"}`}
-              >
-                <span>{copy.startUnassigned}</span>
-                {!effectiveTaskId ? <Check size={16} strokeWidth={2.4} /> : null}
-              </button>
               {activeTaskRows.map(({ task, depth, hasChildren }) => {
                 const selected = effectiveTaskId === task.id;
                 const expanded = visibleExpandedTaskIds.has(task.id);
