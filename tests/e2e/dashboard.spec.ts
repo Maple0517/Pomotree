@@ -243,6 +243,12 @@ test("daily timeline uses proportional rail segments and selectable detail", asy
   await expect(timeline.locator("aside").getByText("45m")).toBeVisible();
 
   const rail = timeline.getByLabel("Timeline rail");
+  const pauseVisual = rail.getByTestId("timeline-pause-segment-pause-session-25m-0").first();
+  await expect(pauseVisual).toBeVisible();
+  await expect(pauseVisual).toHaveCSS("pointer-events", "none");
+  await expect(pauseVisual).toHaveCSS("z-index", "10");
+  const pauseBox = await pauseVisual.boundingBox();
+  expect(pauseBox?.height ?? 0).toBeGreaterThan(0);
   const shortSegment = rail.locator('button[aria-label*="Quick note"]').first();
   const longVisual = rail.getByTestId("timeline-focus-segment-session-25m").first();
   const shortVisual = rail.getByTestId("timeline-focus-segment-session-3m").first();

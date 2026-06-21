@@ -512,6 +512,20 @@ export function DailyFocusTimeline({
 
             <div className="relative" aria-label="Timeline rail">
               <div className="absolute left-1/2 top-0 h-full w-[5px] -translate-x-1/2 rounded-full bg-[var(--border)]" />
+              {model.pauseSegments.map((pause) => {
+                const top = projectTimeToPercent(pause.startAt.getTime(), viewStartMs, viewEndMs);
+                const height = projectTimeToPercent(pause.endAt.getTime(), viewStartMs, viewEndMs) - top;
+                const visualHeightPx = Math.max((height / 100) * timelineHeight, 10);
+                return (
+                  <span
+                    key={pause.id}
+                    data-testid={`timeline-pause-segment-${pause.id}`}
+                    className="pointer-events-none absolute left-1/2 z-10 w-3 -translate-x-1/2 rounded-full bg-[var(--muted)]/60 ring-[3px] ring-[var(--surface)]"
+                    style={{ top: `${top}%`, height: visualHeightPx }}
+                    aria-hidden="true"
+                  />
+                );
+              })}
               {annotationGroups.map((group) => {
                 const top = projectTimeToPercent(group.startAt.getTime(), viewStartMs, viewEndMs);
                 const height = projectTimeToPercent(group.endAt.getTime(), viewStartMs, viewEndMs) - top;
