@@ -15,12 +15,15 @@ type TimelineCopy = {
   correctAttribution: string;
   today: string;
   idle: string;
+  reviewLabel: string;
+  todayReview: string;
+  idleTime: string;
+  emptyReviewHint: string;
   save: string;
   unassigned: string;
   totalFocused: string;
   sessionCount: string;
   longestSession: string;
-  timeline: string;
   previousDay: string;
   nextDay: string;
   backToToday: string;
@@ -407,6 +410,7 @@ export function DailyFocusTimeline({
   const latestSessionId = model.sessions.at(-1)?.sessionId ?? null;
   const defaultSelectedSessionIds = annotationGroups.find((group) => latestSessionId && group.sessionIds.includes(latestSessionId))?.sessionIds ?? null;
   const selectedSession = buildSelectedTimelineDetail(model.sessions, selectedSessionIds ?? defaultSelectedSessionIds);
+  const idleSeconds = model.idleGaps.reduce((total, gap) => total + gap.durationSeconds, 0);
   const viewStartMs = model.viewStart.getTime();
   const viewEndMs = model.viewEnd.getTime();
   const isToday = isSameLocalDay(timelineDay, new Date());
@@ -425,13 +429,13 @@ export function DailyFocusTimeline({
   };
 
   return (
-    <section aria-label={copy.timeline} className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[0_1px_0_var(--shadow-line)] sm:p-5">
+    <section aria-label={copy.todayReview} className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[0_1px_0_var(--shadow-line)] sm:p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">Timeline</p>
-          <h3 className="mt-1 text-xl font-semibold tracking-tight">{copy.timeline}</h3>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">{copy.reviewLabel}</p>
+          <h3 className="mt-1 text-xl font-semibold tracking-tight">{copy.todayReview}</h3>
         </div>
-        <nav className="flex items-center gap-2" aria-label={copy.timeline}>
+        <nav className="flex items-center gap-2" aria-label={copy.todayReview}>
           <button
             className="grid h-9 w-9 place-items-center rounded-full border border-[var(--border)] text-[var(--muted-strong)] transition hover:bg-[var(--surface-soft)]"
             aria-label={copy.previousDay}
@@ -466,10 +470,11 @@ export function DailyFocusTimeline({
         </nav>
       </div>
 
-      <div className="mt-5 grid gap-3 sm:grid-cols-3">
+      <div className="mt-5 grid gap-3 sm:grid-cols-4">
         <TimelineMetric label={copy.totalFocused} value={formatCompactDuration(model.totalFocusSeconds)} tone="accent" />
         <TimelineMetric label={copy.sessionCount} value={String(model.sessionCount)} />
         <TimelineMetric label={copy.longestSession} value={formatCompactDuration(model.longestSessionSeconds)} tone="warm" />
+        <TimelineMetric label={copy.idleTime} value={formatCompactDuration(idleSeconds)} />
       </div>
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-[1.35rem] bg-[var(--surface-soft)] px-3 py-2">
@@ -541,8 +546,9 @@ export function DailyFocusTimeline({
 
             <div className="relative">
               {model.sessions.length === 0 ? (
-                <div className="absolute left-0 top-1/2 max-w-[28ch] -translate-y-1/2 rounded-2xl bg-[var(--surface)] px-4 py-3 text-sm font-medium text-[var(--muted)] shadow-[0_1px_0_var(--shadow-line)]">
-                  {copy.noSessionsForDay}
+                <div className="absolute left-0 top-1/2 max-w-[34ch] -translate-y-1/2 rounded-[1.35rem] border border-dashed border-[var(--border)] bg-[var(--surface)] px-4 py-4 shadow-[0_1px_0_var(--shadow-line)]">
+                  <p className="text-sm font-semibold text-[var(--foreground)]">{copy.noSessionsForDay}</p>
+                  <p className="mt-1 text-xs leading-5 text-[var(--muted)]">{copy.emptyReviewHint}</p>
                 </div>
               ) : null}
 

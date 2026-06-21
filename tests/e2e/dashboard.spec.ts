@@ -227,9 +227,11 @@ test("daily timeline uses proportional rail segments and selectable detail", asy
   await seedTimelineData(page);
   await page.reload({ waitUntil: "networkidle" });
 
-  await page.getByText("Daily focus timeline").first().click();
-  const timeline = page.getByRole("region", { name: "Daily focus timeline" });
+  await expect(page.locator("details").filter({ hasText: "Daily focus timeline" })).toHaveCount(0);
+  const timeline = page.getByRole("region", { name: "Today review" });
   await expect(timeline.getByRole("button", { name: "Full day" })).toBeVisible();
+  await expect(timeline.getByText("Idle time")).toBeVisible();
+  await expect(timeline.getByText("10m", { exact: true })).toBeVisible();
   await expect(timeline.getByText("Deep work").first()).toBeVisible();
   await expect(timeline.getByText("Quick note").first()).toBeVisible();
   await expect(timeline.locator("aside").getByText("Quick note")).toBeVisible();
@@ -280,8 +282,7 @@ test("dashboard task displays use child title with parent context", async ({ pag
   const rowMenu = page.locator("details.task-row-menu[open]");
   await expect(rowMenu.getByRole("button", { name: "Archive" })).toBeVisible();
 
-  await page.getByText("Daily focus timeline").first().click();
-  const timeline = page.getByRole("region", { name: "Daily focus timeline" });
+  const timeline = page.getByRole("region", { name: "Today review" });
   await expect(timeline.getByText("Project / Draft")).toHaveCount(0);
   await expect(timeline.getByText("Draft").first()).toBeVisible();
 });
@@ -290,8 +291,7 @@ test("daily timeline date navigation handles empty days and mobile width", async
   await seedTimelineData(page);
   await page.reload({ waitUntil: "networkidle" });
 
-  await page.getByText("Daily focus timeline").first().click();
-  const timeline = page.getByRole("region", { name: "Daily focus timeline" });
+  const timeline = page.getByRole("region", { name: "Today review" });
   await timeline.getByRole("button", { name: "Previous day" }).click();
   await expect(timeline.getByText("No completed focus sessions on this day.").first()).toBeVisible();
   await expect(timeline.getByText("0m").first()).toBeVisible();

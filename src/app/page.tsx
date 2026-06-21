@@ -84,6 +84,9 @@ type DashboardCopy = {
   sectionCapture: string;
   sectionPreferences: string;
   sectionReview: string;
+  todayReview: string;
+  idleTime: string;
+  emptyReviewHint: string;
   sectionTree: string;
   settings: string;
   state: string;
@@ -102,7 +105,6 @@ type DashboardCopy = {
   totalFocused: string;
   sessionCount: string;
   longestSession: string;
-  timeline: string;
   previousDay: string;
   nextDay: string;
   backToToday: string;
@@ -266,6 +268,9 @@ const DASHBOARD_TEXT: Record<AppLanguage, DashboardCopy> = {
     sectionCapture: "Capture",
     sectionPreferences: "Preferences",
     sectionReview: "Review",
+    todayReview: "Today review",
+    idleTime: "Idle time",
+    emptyReviewHint: "Finish a focus session to build today's review.",
     sectionTree: "Tree",
     settings: "Settings",
     state: "State",
@@ -281,7 +286,6 @@ const DASHBOARD_TEXT: Record<AppLanguage, DashboardCopy> = {
     totalFocused: "Total focused",
     sessionCount: "Sessions",
     longestSession: "Longest",
-    timeline: "Daily focus timeline",
     previousDay: "Previous day",
     nextDay: "Next day",
     backToToday: "Today",
@@ -370,6 +374,9 @@ const DASHBOARD_TEXT: Record<AppLanguage, DashboardCopy> = {
     sectionCapture: "记录",
     sectionPreferences: "偏好",
     sectionReview: "回顾",
+    todayReview: "今天复盘",
+    idleTime: "空档时长",
+    emptyReviewHint: "完成一次专注后，这里会生成今天复盘。",
     sectionTree: "任务树",
     settings: "设置",
     state: "状态",
@@ -385,7 +392,6 @@ const DASHBOARD_TEXT: Record<AppLanguage, DashboardCopy> = {
     totalFocused: "总专注时长",
     sessionCount: "专注次数",
     longestSession: "最长时长",
-    timeline: "分段时间线",
     previousDay: "前一天",
     nextDay: "后一天",
     backToToday: "今天",
@@ -1295,52 +1301,44 @@ export default function Home() {
                 </div>
               </div>
 
-              <details className="group rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_1px_0_var(--shadow-line)]">
-                <summary className="flex list-none items-center justify-between gap-4 text-left [&::-webkit-details-marker]:hidden">
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">{copy.timeline}</p>
-                    <h3 className="mt-1 text-xl font-semibold tracking-tight">{copy.timeline}</h3>
-                  </div>
-                  <ChevronDown size={18} className="text-[var(--muted)] transition group-open:rotate-180" aria-hidden="true" />
-                </summary>
-                <div className="mt-5">
-                  <DailyFocusTimeline
-                    copy={{
-                      cancel: copy.cancel,
-                      correctAttribution: copy.correctAttribution,
-                      today: copy.today,
-                      idle: copy.idle,
-                      save: copy.save,
-                      unassigned: copy.unassigned,
-                      totalFocused: copy.totalFocused,
-                      sessionCount: copy.sessionCount,
-                      longestSession: copy.longestSession,
-                      timeline: copy.timeline,
-                      previousDay: copy.previousDay,
-                      nextDay: copy.nextDay,
-                      backToToday: copy.backToToday,
-                      noSessionsForDay: copy.noSessionsForDay,
-                      sessionDetail: copy.sessionDetail,
-                      timeRange: copy.timeRange,
-                      duration: copy.duration,
-                      pauseDuration: copy.pauseDuration,
-                      status: copy.status,
-                      showFullDay: copy.showFullDay,
-                      showActiveWindow: copy.showActiveWindow,
-                      timingAnomaly: copy.timingAnomaly,
-                      timingAnomalyCount: copy.timingAnomalyCount,
-                      shortSessions: copy.shortSessions,
-                      summary: copy.summary,
-                    }}
-                    language={language}
-                    sessions={sessions}
-                    pauses={pauses}
-                    tasks={tasks}
-                    taskOptions={activeTaskRows.map(({ task, depth }) => ({ id: task.id, title: task.title, depth }))}
-                    onChangeSessionAttribution={changeSessionAttribution}
-                  />
-                </div>
-              </details>
+              <DailyFocusTimeline
+                copy={{
+                  cancel: copy.cancel,
+                  correctAttribution: copy.correctAttribution,
+                  today: copy.today,
+                  idle: copy.idle,
+                  reviewLabel: copy.sectionReview,
+                  todayReview: copy.todayReview,
+                  idleTime: copy.idleTime,
+                  emptyReviewHint: copy.emptyReviewHint,
+                  save: copy.save,
+                  unassigned: copy.unassigned,
+                  totalFocused: copy.totalFocused,
+                  sessionCount: copy.sessionCount,
+                  longestSession: copy.longestSession,
+                  previousDay: copy.previousDay,
+                  nextDay: copy.nextDay,
+                  backToToday: copy.backToToday,
+                  noSessionsForDay: copy.noSessionsForDay,
+                  sessionDetail: copy.sessionDetail,
+                  timeRange: copy.timeRange,
+                  duration: copy.duration,
+                  pauseDuration: copy.pauseDuration,
+                  status: copy.status,
+                  showFullDay: copy.showFullDay,
+                  showActiveWindow: copy.showActiveWindow,
+                  timingAnomaly: copy.timingAnomaly,
+                  timingAnomalyCount: copy.timingAnomalyCount,
+                  shortSessions: copy.shortSessions,
+                  summary: copy.summary,
+                }}
+                language={language}
+                sessions={sessions}
+                pauses={pauses}
+                tasks={tasks}
+                taskOptions={activeTaskRows.map(({ task, depth }) => ({ id: task.id, title: task.title, depth }))}
+                onChangeSessionAttribution={changeSessionAttribution}
+              />
             </div>
           </div>
 
